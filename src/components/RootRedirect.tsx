@@ -1,9 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router';
+import { Navigate } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
 import Loading from './Loading';
-
-export default function ProtectedRoute() {
+export default function RootRedirect() {
     const auth = useContext(AuthContext);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -17,9 +16,11 @@ export default function ProtectedRoute() {
         return <Loading />;
     }
 
-    if (!auth?.user) {
-        return <Navigate to="/login" replace />;
+    // If user is authenticated, redirect to dashboard
+    if (auth?.user) {
+        return <Navigate to="/dashboard" replace />;
     }
 
-    return <Outlet />;
+    // If user is not authenticated, redirect to login
+    return <Navigate to="/login" replace />;
 } 
