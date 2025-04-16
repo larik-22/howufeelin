@@ -4,22 +4,22 @@ import AuthContext from '@/contexts/auth/authContext';
 import Loading from './Loading';
 
 export default function ProtectedRoute() {
-    const auth = useContext(AuthContext);
-    const [isLoading, setIsLoading] = useState(true);
+  const auth = useContext(AuthContext);
+  const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        if (auth) {
-            setIsLoading(false);
-        }
-    }, [auth]);
-
-    if (isLoading) {
-        return <Loading />;
+  useEffect(() => {
+    if (auth) {
+      setIsLoading(false);
     }
+  }, [auth]);
 
-    if (!auth?.user) {
-        return <Navigate to="/login" replace />;
-    }
+  if (isLoading) {
+    return <Loading />;
+  }
 
-    return <Outlet />;
-} 
+  if (!auth?.firebaseUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}

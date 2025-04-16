@@ -22,14 +22,14 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/firebase.ts';
 import AuthContext from './authContext';
-import { AuthContextType } from '@/types/auth';
+import { AuthContextType } from '@/types/Auth';
 import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
 
 type AuthOperation<T> = () => Promise<T>;
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthContextType['user']>(null);
+  const [user, setUser] = useState<AuthContextType['firebaseUser']>(null);
   const [loading, setLoading] = useState(true); // Initial auth state loading
   const [operationLoading, setOperationLoading] = useState(false); // Loading for auth operations
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +69,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     if (!userDoc.exists()) {
       const newUser: MyUser = {
         userId: firebaseUser.uid,
-        username:
-          username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+        username: username || '', // Don't set a default username
         email: firebaseUser.email || '',
         displayName:
           username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
@@ -79,7 +78,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       };
 
       await setDoc(userDocRef, newUser);
+      return newUser;
     }
+    return userDoc.data() as MyUser;
   };
 
   const linkEmailPassword = async (password: string) => {
@@ -95,11 +96,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const signInWithGoogle = async () => {
-    await handleAuthOperation(async () => {
+    return await handleAuthOperation(async () => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      await createUserDocument(result.user);
-      return result;
+      const userDoc = await createUserDocument(result.user);
+      return { result, userDoc };
     });
   };
 
@@ -161,7 +162,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const clearError = () => setError(null);
 
   const value: AuthContextType = {
-    user,
+    firebaseUser: user,
     loading,
     operationLoading,
     error,

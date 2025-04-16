@@ -67,16 +67,30 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
 
   const handleGoogleSignIn = async () => {
     try {
-      await auth.signInWithGoogle();
-      setShowPasswordDialog(true);
-      setDialogError('');
-      setDialogStep('username');
-      // Generate a fallback username from email
-      const email = auth.user?.email;
-      if (email) {
-        const baseUsername = email.split('@')[0];
-        const username = baseUsername + '-' + uuidv4().slice(0, 4);
-        setGoogleUsername(username);
+      const { result, userDoc } = await auth.signInWithGoogle();
+
+      // Wait for the user to be available
+      if (!result.user) {
+        throw new Error('Failed to get user after Google sign in');
+      }
+
+      if (userDoc.username) {
+        // User already has a username, only show password dialog
+        setShowPasswordDialog(true);
+        setDialogError('');
+        setDialogStep('password');
+      } else {
+        // No username set, show both steps
+        setShowPasswordDialog(true);
+        setDialogError('');
+        setDialogStep('username');
+        // Generate a fallback username from email
+        const email = result.user.email;
+        if (email) {
+          const baseUsername = email.split('@')[0];
+          const username = baseUsername + '-' + uuidv4().slice(0, 4);
+          setGoogleUsername(username);
+        }
       }
     } catch (error) {
       const authError = createAuthError(error);

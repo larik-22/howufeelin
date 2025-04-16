@@ -17,7 +17,7 @@ export default function RootRedirect() {
   }
 
   // If user is authenticated, redirect to dashboard
-  if (auth.user) {
+  if (auth.firebaseUser) {
     return <Navigate to="/dashboard" replace />;
   }
 

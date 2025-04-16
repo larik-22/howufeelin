@@ -17,7 +17,10 @@ export default function AuthRoute({ children }: { children: React.ReactNode }) {
   }
 
   // If user is authenticated and has a password provider, redirect to dashboard
-  if (auth.user && auth.user.providerData.some(provider => provider.providerId === 'password')) {
+  if (
+    auth.firebaseUser &&
+    auth.firebaseUser.providerData.some(provider => provider.providerId === 'password')
+  ) {
     return <Navigate to="/dashboard" replace />;
   }
 
