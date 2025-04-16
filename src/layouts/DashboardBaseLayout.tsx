@@ -1,9 +1,10 @@
 import { ReactNode } from 'react';
 import { Box, Container } from '@mui/material';
 import Navbar from '@/components/Navbar';
+import { Outlet } from 'react-router';
 
 interface DashboardBaseLayoutProps {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 export default function DashboardBaseLayout({ children }: DashboardBaseLayoutProps) {
@@ -11,7 +12,7 @@ export default function DashboardBaseLayout({ children }: DashboardBaseLayoutPro
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navbar />
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        {children}
+        {children || <Outlet />}
       </Container>
     </Box>
   );

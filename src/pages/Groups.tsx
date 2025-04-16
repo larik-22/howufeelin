@@ -1,4 +1,5 @@
 import { useContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
 import {
   Typography,
@@ -26,6 +27,7 @@ import JoinGroupDialog from '@/components/JoinGroupDialog';
 import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
+import { copyToClipboard } from '@/utils/clipboard';
 
 // Constants
 const DESCRIPTION_MAX_LENGTH = 100;
@@ -37,6 +39,7 @@ interface Notification {
 
 export default function Groups() {
   const auth = useContext(AuthContext);
+  const navigate = useNavigate();
   const { hasPermission, getRoleColor, getRoleLabel } = useGroupPermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
@@ -115,16 +118,15 @@ export default function Groups() {
   };
 
   const handleCopyJoinCode = async (joinCode: string) => {
-    try {
-      await navigator.clipboard.writeText(joinCode);
+    const success = await copyToClipboard(joinCode);
+    if (success) {
       setCopiedCode(joinCode);
       setNotification({
         message: 'Join code copied to clipboard',
         type: 'success',
       });
       setTimeout(() => setCopiedCode(null), 1000); // Reset after 1 seconds
-    } catch (err) {
-      console.error('Failed to copy join code:', err);
+    } else {
       setNotification({
         message: 'Failed to copy join code',
         type: 'error',
@@ -173,8 +175,26 @@ export default function Groups() {
     setNotification(null);
   };
 
+  const handleNavigateToGroupDetail = (groupId: string) => {
+    navigate(`/groups/${groupId}`);
+  };
+
   const renderGroupCard = (group: Group) => (
-    <Card key={group.groupId} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Card
+      key={group.groupId}
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        cursor: 'pointer',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: 4,
+        },
+      }}
+      onClick={() => handleNavigateToGroupDetail(group.groupId)}
+    >
       <CardContent sx={{ flexGrow: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <GroupIcon sx={{ mr: 1, color: 'primary.main' }} />
@@ -183,7 +203,14 @@ export default function Groups() {
           </Typography>
           {hasPermission(group, GroupPermission.EDIT_GROUP) && (
             <Tooltip title="Edit Group">
-              <IconButton size="small" onClick={() => handleOpenEditDialog(group)} sx={{ ml: 1 }}>
+              <IconButton
+                size="small"
+                onClick={e => {
+                  e.stopPropagation(); // Prevent card click when clicking edit button
+                  handleOpenEditDialog(group);
+                }}
+                sx={{ ml: 1 }}
+              >
                 <EditIcon fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -196,7 +223,10 @@ export default function Groups() {
           {group.groupDescription.length > DESCRIPTION_MAX_LENGTH && (
             <Button
               size="small"
-              onClick={() => toggleDescription(group.groupId)}
+              onClick={e => {
+                e.stopPropagation(); // Prevent card click when clicking show more/less
+                toggleDescription(group.groupId);
+              }}
               sx={{ mt: 0.5, p: 0, minWidth: 'auto' }}
               endIcon={
                 expandedDescriptions[group.groupId] ? <ExpandLessIcon /> : <ExpandMoreIcon />
@@ -224,18 +254,33 @@ export default function Groups() {
           size="small"
           variant="outlined"
           sx={{ mt: 1 }}
-          onClick={() => handleCopyJoinCode(group.joinCode)}
+          onClick={e => {
+            e.stopPropagation(); // Prevent card click when clicking join code
+            handleCopyJoinCode(group.joinCode);
+          }}
           icon={<ContentCopyIcon />}
           color={copiedCode === group.joinCode ? 'success' : 'default'}
         />
       </CardContent>
       <CardActions>
         {hasPermission(group, GroupPermission.MANAGE_MEMBERS) ? (
-          <Button size="small" color="primary">
+          <Button
+            size="small"
+            color="primary"
+            onClick={e => {
+              e.stopPropagation(); // Prevent card click when clicking manage members
+              // This will be implemented in the future
+            }}
+          >
             Manage Members
           </Button>
         ) : (
-          <Button size="small" color="primary" disabled>
+          <Button
+            size="small"
+            color="primary"
+            disabled
+            onClick={e => e.stopPropagation()} // Prevent card click when clicking disabled button
+          >
             View Members
           </Button>
         )}

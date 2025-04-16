@@ -11,10 +11,13 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Snackbar,
 } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { MyUser } from '@/types/MyUser';
+import { copyToClipboard } from '@/utils/clipboard';
 
 // Validation constants
 export const MAX_GROUP_NAME_LENGTH = 50;
@@ -27,6 +30,11 @@ export interface GroupFormDialogProps {
   mode: 'create' | 'edit';
   group: Group | null;
   user: MyUser;
+}
+
+interface Notification {
+  message: string;
+  type: 'success' | 'error' | 'info';
 }
 
 export default function GroupFormDialog({
@@ -46,6 +54,8 @@ export default function GroupFormDialog({
   const [createdGroup, setCreatedGroup] = useState<{ groupId: string; joinCode: string } | null>(
     null
   );
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [notification, setNotification] = useState<Notification | null>(null);
 
   // Update form values when group changes (for edit mode)
   useEffect(() => {
@@ -60,6 +70,8 @@ export default function GroupFormDialog({
     setDescriptionError(null);
     setError(null);
     setCreatedGroup(null);
+    setCopiedCode(null);
+    setNotification(null);
   }, [mode, group]);
 
   const validateForm = (): boolean => {
@@ -149,12 +161,35 @@ export default function GroupFormDialog({
     setNameError(null);
     setDescriptionError(null);
     setCreatedGroup(null);
+    setCopiedCode(null);
+    setNotification(null);
     onClose();
   };
 
   const handleSuccessClose = () => {
     onSubmit(); // Notify parent of success
     handleClose(); // Reset state and close dialog
+  };
+
+  const handleCopyJoinCode = async (joinCode: string) => {
+    const success = await copyToClipboard(joinCode);
+    if (success) {
+      setCopiedCode(joinCode);
+      setNotification({
+        message: 'Join code copied to clipboard',
+        type: 'success',
+      });
+      setTimeout(() => setCopiedCode(null), 1000); // Reset after 1 second
+    } else {
+      setNotification({
+        message: 'Failed to copy join code',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleCloseNotification = () => {
+    setNotification(null);
   };
 
   const isCreateSuccess = mode === 'create' && createdGroup !== null;
@@ -174,22 +209,10 @@ export default function GroupFormDialog({
               </Typography>
               <Chip
                 label={createdGroup.joinCode}
-                color="primary"
                 sx={{ fontSize: '1.2rem', py: 1, px: 2, mb: 2, cursor: 'pointer' }}
-                onClick={async () => {
-                  await navigator.clipboard.writeText(createdGroup.joinCode);
-                  // Show a temporary success message
-                  const originalLabel = createdGroup.joinCode;
-                  const chip = document.getElementById('join-code-chip');
-                  if (chip) {
-                    chip.innerText = 'Copied!';
-                    setTimeout(() => {
-                      chip.innerText = originalLabel;
-                    }, 1500);
-                  }
-                }}
-                id="join-code-chip"
-                clickable
+                onClick={() => handleCopyJoinCode(createdGroup.joinCode)}
+                icon={<ContentCopyIcon />}
+                color={copiedCode === createdGroup.joinCode ? 'success' : 'primary'}
               />
               <Typography variant="body2" color="text.secondary">
                 You can always find this code in the group details.
@@ -266,6 +289,14 @@ export default function GroupFormDialog({
           )}
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!notification}
+        autoHideDuration={3000}
+        onClose={handleCloseNotification}
+        message={notification?.message}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </>
   );
 }
