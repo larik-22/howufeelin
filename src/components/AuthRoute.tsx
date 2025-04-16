@@ -2,6 +2,7 @@ import { Navigate } from 'react-router';
 import { useContext } from 'react';
 import AuthContext from '@/contexts/auth/authContext';
 import Loading from './Loading';
+import { UserInfo } from 'firebase/auth';
 
 export default function AuthRoute({ children }: { children: React.ReactNode }) {
   const auth = useContext(AuthContext);
@@ -19,7 +20,7 @@ export default function AuthRoute({ children }: { children: React.ReactNode }) {
   // If user is authenticated and has a password provider, redirect to dashboard
   if (
     auth.firebaseUser &&
-    auth.firebaseUser.providerData.some(provider => provider.providerId === 'password')
+    auth.firebaseUser.providerData.some((provider: UserInfo) => provider.providerId === 'password')
   ) {
     return <Navigate to="/dashboard" replace />;
   }
