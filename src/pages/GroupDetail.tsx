@@ -276,15 +276,48 @@ export default function GroupDetail() {
 
   return (
     <Box sx={{ py: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={handleBackToGroups} sx={{ mr: 2 }}>
-          Back to Groups
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          mb: 3,
+          position: 'relative',
+        }}
+      >
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={handleBackToGroups}
+          variant="text"
+          sx={{ position: 'absolute', left: 0 }}
+        >
+          Back
         </Button>
-        <Typography variant="h5" component="h1" sx={{ flexGrow: 1 }}>
+
+        <Typography
+          variant="h5"
+          component="h1"
+          sx={{
+            fontWeight: 'bold',
+            textAlign: 'center',
+            width: '100%',
+          }}
+        >
           {group.groupName}
         </Typography>
+
         <Tooltip title="Leave Group">
-          <IconButton color="error" onClick={handleLeaveGroup} sx={{ ml: 2 }}>
+          <IconButton
+            color="error"
+            onClick={handleLeaveGroup}
+            sx={{
+              position: 'absolute',
+              right: 0,
+              '&:hover': {
+                bgcolor: 'error.light',
+                color: 'white',
+              },
+            }}
+          >
             <ExitToAppIcon />
           </IconButton>
         </Tooltip>
@@ -327,24 +360,28 @@ export default function GroupDetail() {
             <Paper
               variant="outlined"
               sx={{
-                p: 1,
+                p: 1.5,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 backgroundColor:
                   copiedCode === group.joinCode ? 'action.selected' : 'background.paper',
                 borderRadius: 2,
                 borderColor: 'primary.main',
+                width: '100%',
+                maxWidth: 300,
               }}
             >
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', mr: 1 }}>
+              <Typography variant="body1" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
                 {group.joinCode}
               </Typography>
               <Button
                 size="small"
                 startIcon={<ContentCopyIcon />}
                 onClick={() => handleCopyJoinCode(group.joinCode)}
-                variant="outlined"
+                variant="text"
                 color="primary"
+                sx={{ ml: 1 }}
               >
                 Copy
               </Button>
