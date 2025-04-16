@@ -34,6 +34,8 @@ export const AUTH_ERROR_MESSAGES: Record<string, string> = {
     'This credential is already associated with a different user account.',
   'auth/provider-already-linked': 'This provider is already linked to your account.',
   'auth/no-such-provider': 'This provider is not linked to your account.',
+  // Custom errors
+  'username/taken': 'This username is already taken. Please choose another one.',
 };
 
 export function createAuthError(error: unknown): AuthError {

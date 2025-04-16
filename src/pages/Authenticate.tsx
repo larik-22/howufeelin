@@ -40,6 +40,8 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
   const [linkPassword, setLinkPassword] = useState('');
   const [error, setError] = useState('');
   const [dialogError, setDialogError] = useState('');
+  const [dialogStep, setDialogStep] = useState<'username' | 'password'>('username');
+  const [googleUsername, setGoogleUsername] = useState('');
 
   // Update isRegister state when URL changes
   useEffect(() => {
@@ -67,9 +69,31 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
       await auth.signInWithGoogle();
       setShowPasswordDialog(true);
       setDialogError('');
+      setDialogStep('username');
+      // Generate a fallback username from email
+      const email = auth.user?.email;
+      if (email) {
+        const baseUsername = email.split('@')[0];
+        setGoogleUsername(baseUsername);
+      }
     } catch (error) {
       const authError = createAuthError(error);
       setError(authError.message);
+    }
+  };
+
+  const handleSetUsername = async () => {
+    try {
+      if (!googleUsername.trim()) {
+        setDialogError('Username is required');
+        return;
+      }
+      await auth.updateUsername(googleUsername);
+      setDialogStep('password');
+      setDialogError('');
+    } catch (error) {
+      const authError = createAuthError(error);
+      setDialogError(authError.message);
     }
   };
 
@@ -231,37 +255,75 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
       </Box>
 
       <Dialog open={showPasswordDialog} onClose={() => setShowPasswordDialog(false)}>
-        <DialogTitle>Set a Password</DialogTitle>
+        <DialogTitle>
+          {dialogStep === 'username' ? 'Set Your Username' : 'Set a Password'}
+        </DialogTitle>
         <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            To enable email/password sign-in, please set a password for your account.
-          </Typography>
-          {dialogError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {dialogError}
-            </Alert>
+          {dialogStep === 'username' ? (
+            <>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Please choose a username for your account.
+              </Typography>
+              {dialogError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {dialogError}
+                </Alert>
+              )}
+              <TextField
+                label="Username"
+                value={googleUsername}
+                onChange={e => setGoogleUsername(e.target.value)}
+                fullWidth
+                required
+                disabled={auth.operationLoading}
+                error={!!dialogError}
+                autoFocus
+              />
+            </>
+          ) : (
+            <>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                To enable email/password sign-in, please set a password for your account.
+              </Typography>
+              {dialogError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {dialogError}
+                </Alert>
+              )}
+              <TextField
+                label="Password"
+                type="password"
+                value={linkPassword}
+                onChange={e => setLinkPassword(e.target.value)}
+                fullWidth
+                required
+                disabled={auth.operationLoading}
+                error={!!dialogError}
+              />
+            </>
           )}
-          <TextField
-            label="Password"
-            type="password"
-            value={linkPassword}
-            onChange={e => setLinkPassword(e.target.value)}
-            fullWidth
-            required
-            disabled={auth.operationLoading}
-            error={!!dialogError}
-          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowPasswordDialog(false)} disabled={auth.operationLoading}>
-            Skip
-          </Button>
+          {dialogStep === 'password' && (
+            <Button onClick={() => setShowPasswordDialog(false)} disabled={auth.operationLoading}>
+              Skip
+            </Button>
+          )}
           <Button
-            onClick={handleLinkPassword}
-            disabled={!linkPassword || auth.operationLoading}
+            onClick={dialogStep === 'username' ? handleSetUsername : handleLinkPassword}
+            disabled={
+              (dialogStep === 'username' ? !googleUsername.trim() : !linkPassword) ||
+              auth.operationLoading
+            }
             variant="contained"
           >
-            {auth.operationLoading ? <CircularProgress size={24} /> : 'Set Password'}
+            {auth.operationLoading ? (
+              <CircularProgress size={24} />
+            ) : dialogStep === 'username' ? (
+              'Continue'
+            ) : (
+              'Set Password'
+            )}
           </Button>
         </DialogActions>
       </Dialog>

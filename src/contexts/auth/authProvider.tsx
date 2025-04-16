@@ -10,12 +10,21 @@ import {
   EmailAuthProvider,
   linkWithCredential,
 } from 'firebase/auth';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  setDoc,
+  doc,
+  Timestamp,
+  getDoc,
+} from 'firebase/firestore';
 import { auth, db } from '@/firebase.ts';
 import AuthContext from './authContext';
 import { AuthContextType } from '@/types/auth';
-import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { MyUser } from '@/types/MyUser';
-import { createAuthError } from '@/utils/authErrors';
+import { createAuthError, AuthError } from '@/utils/authErrors';
 
 type AuthOperation<T> = () => Promise<T>;
 
@@ -116,6 +125,39 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     await handleAuthOperation(() => firebaseSignOut(auth));
   };
 
+  const updateUsername = async (username: string) => {
+    if (!auth.currentUser) {
+      throw new Error('No user is signed in');
+    }
+
+    await handleAuthOperation(async () => {
+      // Check if username is already taken
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // Check if the found document belongs to the current user
+        const existingUser = querySnapshot.docs[0];
+        if (existingUser.id !== auth.currentUser!.uid) {
+          throw new AuthError('Username is already taken', 'username/taken');
+        }
+      }
+
+      // Update Firestore user document
+      const userDocRef = doc(db, 'users', auth.currentUser!.uid);
+      await setDoc(
+        userDocRef,
+        {
+          username,
+          displayName: username,
+          updatedAt: Timestamp.now(),
+        },
+        { merge: true }
+      );
+    });
+  };
+
   const clearError = () => setError(null);
 
   const value: AuthContextType = {
@@ -129,6 +171,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     signOut,
     clearError,
     linkEmailPassword,
+    updateUsername,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
