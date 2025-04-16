@@ -12,24 +12,30 @@ import {
   Alert,
   IconButton,
   Tooltip,
+  Snackbar,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import GroupIcon from '@mui/icons-material/Group';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
 import PeopleIcon from '@mui/icons-material/People';
-import CreateGroupDialog from '@/components/CreateGroupDialog';
-import EditGroupDialog from '@/components/EditGroupDialog';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import GroupFormDialog from '@/components/GroupFormDialog';
 import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 
+// Constants
+const DESCRIPTION_MAX_LENGTH = 100;
+
 export default function Groups() {
   const auth = useContext(AuthContext);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -69,25 +75,24 @@ export default function Groups() {
     }
   }, [auth?.myUser?.userId, fetchGroups, lastFetchedUserId]);
 
-  const handleCreateGroup = () => {
-    setIsCreateDialogOpen(true);
+  const handleOpenCreateDialog = () => {
+    setDialogMode('create');
+    setSelectedGroup(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleOpenEditDialog = (group: Group) => {
+    setDialogMode('edit');
+    setSelectedGroup(group);
+    setIsDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+    setSelectedGroup(null);
   };
 
   const handleGroupCreated = () => {
-    // Clear the cache for the current user before fetching
-    if (auth?.myUser?.userId) {
-      groupService.clearUserGroupsCache(auth.myUser.userId);
-    }
-    fetchGroups();
-    setIsCreateDialogOpen(false);
-  };
-
-  const handleEditGroup = (group: Group) => {
-    setSelectedGroup(group);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleGroupUpdated = () => {
     // Clear the cache for the current user before fetching
     if (auth?.myUser?.userId) {
       groupService.clearUserGroupsCache(auth.myUser.userId);
@@ -103,6 +108,23 @@ export default function Groups() {
     } catch (err) {
       console.error('Failed to copy join code:', err);
     }
+  };
+
+  const toggleDescription = (groupId: string) => {
+    setExpandedDescriptions(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  };
+
+  const truncateDescription = (description: string, groupId: string) => {
+    if (description.length <= DESCRIPTION_MAX_LENGTH) {
+      return description;
+    }
+
+    return expandedDescriptions[groupId]
+      ? description
+      : `${description.substring(0, DESCRIPTION_MAX_LENGTH)}...`;
   };
 
   if (!auth || !auth.firebaseUser || !auth.myUser) return null;
@@ -135,7 +157,7 @@ export default function Groups() {
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
-          onClick={handleCreateGroup}
+          onClick={handleOpenCreateDialog}
         >
           Create Group
         </Button>
@@ -154,7 +176,7 @@ export default function Groups() {
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
-            onClick={handleCreateGroup}
+            onClick={handleOpenCreateDialog}
           >
             Create Your First Group
           </Button>
@@ -179,14 +201,36 @@ export default function Groups() {
                     {group.groupName}
                   </Typography>
                   <Tooltip title="Edit Group">
-                    <IconButton size="small" onClick={() => handleEditGroup(group)} sx={{ ml: 1 }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenEditDialog(group)}
+                      sx={{ ml: 1 }}
+                    >
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {group.groupDescription}
-                </Typography>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {truncateDescription(group.groupDescription, group.groupId)}
+                  </Typography>
+                  {group.groupDescription.length > DESCRIPTION_MAX_LENGTH && (
+                    <Button
+                      size="small"
+                      onClick={() => toggleDescription(group.groupId)}
+                      sx={{ mt: 0.5, p: 0, minWidth: 'auto' }}
+                      endIcon={
+                        expandedDescriptions[group.groupId] ? (
+                          <ExpandLessIcon />
+                        ) : (
+                          <ExpandMoreIcon />
+                        )
+                      }
+                    >
+                      {expandedDescriptions[group.groupId] ? 'Show less' : 'Show more'}
+                    </Button>
+                  )}
+                </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                   <PeopleIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
                   <Typography variant="body2" color="text.secondary">
@@ -203,11 +247,15 @@ export default function Groups() {
                   icon={<ContentCopyIcon />}
                   color={copiedCode === group.joinCode ? 'success' : 'default'}
                 />
+                <Snackbar
+                  open={copiedCode === group.joinCode}
+                  autoHideDuration={2500}
+                  onClose={() => setCopiedCode(null)}
+                  message="Join code copied to clipboard"
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                />
               </CardContent>
               <CardActions>
-                <Button size="small" color="primary">
-                  View Details
-                </Button>
                 <Button size="small" color="primary">
                   Manage Members
                 </Button>
@@ -217,21 +265,14 @@ export default function Groups() {
         </Box>
       )}
 
-      <CreateGroupDialog
-        open={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
-        onGroupCreated={handleGroupCreated}
+      <GroupFormDialog
+        open={isDialogOpen}
+        onClose={handleDialogClose}
+        onSubmit={handleGroupCreated}
+        mode={dialogMode}
+        group={selectedGroup}
         user={auth.myUser}
       />
-
-      {selectedGroup && (
-        <EditGroupDialog
-          open={isEditDialogOpen}
-          onClose={() => setIsEditDialogOpen(false)}
-          onGroupUpdated={handleGroupUpdated}
-          group={selectedGroup}
-        />
-      )}
     </Box>
   );
 }
