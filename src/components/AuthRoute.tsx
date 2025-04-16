@@ -1,9 +1,9 @@
-import { useContext } from 'react';
 import { Navigate } from 'react-router';
+import { useContext } from 'react';
 import AuthContext from '@/contexts/auth/authContext';
 import Loading from './Loading';
 
-export default function RootRedirect() {
+export default function AuthRoute({ children }: { children: React.ReactNode }) {
   const auth = useContext(AuthContext);
 
   // Show loading only when auth is not initialized
@@ -21,6 +21,6 @@ export default function RootRedirect() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // If user is not authenticated, redirect to login
-  return <Navigate to="/login" replace />;
+  // If user is not authenticated, show the auth page
+  return <>{children}</>;
 }

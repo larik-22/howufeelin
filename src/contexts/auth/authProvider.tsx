@@ -1,88 +1,106 @@
-import { useState, useEffect } from "react";
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "@/firebase.ts";
-import AuthContext from "./authContext";
-import { AuthContextType } from "@/types/auth";
+import { useState, useEffect } from 'react';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from 'firebase/auth';
+import { auth, db } from '@/firebase.ts';
+import AuthContext from './authContext';
+import { AuthContextType } from '@/types/auth';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { MyUser } from '@/types/MyUser';
+import { getAuthErrorMessage } from '@/utils/authErrors';
+
+type AuthOperation<T> = () => Promise<T>;
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [user, setUser] = useState<AuthContextType["user"]>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthContextType['user']>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            setUser(user);
-            setLoading(false);
-        });
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      setUser(user);
+      setLoading(false);
+    });
 
-        return () => unsubscribe();
-    }, []);
+    return () => unsubscribe();
+  }, []);
 
-    const signInWithEmail = async (email: string, password: string) => {
-        try {
-            setLoading(true);
-            setError(null);
-            await signInWithEmailAndPassword(auth, email, password);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to sign in");
-        } finally {
-            setLoading(false);
-        }
-    };
+  async function handleAuthOperation<T>(operation: AuthOperation<T>): Promise<T> {
+    try {
+      setLoading(true);
+      setError(null);
+      return await operation();
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
+      throw err; // Re-throw to allow component to handle the error
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    const signInWithGoogle = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to sign in with Google");
-        } finally {
-            setLoading(false);
-        }
-    };
+  const signInWithEmail = async (email: string, password: string) => {
+    await handleAuthOperation(() => signInWithEmailAndPassword(auth, email, password));
+  };
 
-    const signUp = async (email: string, password: string) => {
-        try {
-            setLoading(true);
-            setError(null);
-            await createUserWithEmailAndPassword(auth, email, password);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to sign up");
-        } finally {
-            setLoading(false);
-        }
-    };
+  const signInWithGoogle = async () => {
+    await handleAuthOperation(async () => {
+      const provider = new GoogleAuthProvider();
+      return await signInWithPopup(auth, provider);
+    });
+  };
 
-    const signOut = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            await signOut();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to sign out");
-        } finally {
-            setLoading(false);
-        }
-    };
+  const signUp = async (email: string, password: string, username: string) => {
+    // Validate input
+    if (!email || !password || !username) {
+      throw new Error('All fields are required');
+    }
 
-    const clearError = () => setError(null);
+    if (username.length < 3) {
+      throw new Error('Username must be at least 3 characters long');
+    }
 
-    const value: AuthContextType = {
-        user,
-        loading,
-        error,
-        signInWithEmail,
-        signInWithGoogle,
-        signUp,
-        signOut,
-        clearError,
-    };
+    await handleAuthOperation(async () => {
+      // Create auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+      // Create user document in Firestore
+      const newUser: MyUser = {
+        userId: firebaseUser.uid,
+        username: username,
+        email: email,
+        displayName: username,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      await setDoc(userDocRef, newUser);
+      return userCredential;
+    });
+  };
+
+  const signOut = async () => {
+    await handleAuthOperation(() => firebaseSignOut(auth));
+  };
+
+  const clearError = () => setError(null);
+
+  const value: AuthContextType = {
+    user,
+    loading,
+    error,
+    signInWithEmail,
+    signInWithGoogle,
+    signUp,
+    signOut,
+    clearError,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
