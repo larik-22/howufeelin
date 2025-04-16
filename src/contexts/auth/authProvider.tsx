@@ -30,18 +30,42 @@ type AuthOperation<T> = () => Promise<T>;
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthContextType['firebaseUser']>(null);
+  const [myUser, setMyUser] = useState<MyUser | null>(null);
   const [loading, setLoading] = useState(true); // Initial auth state loading
   const [operationLoading, setOperationLoading] = useState(false); // Loading for auth operations
   const [error, setError] = useState<string | null>(null);
 
+  // Only fetch user data when explicitly needed
+  const fetchUserData = async (userId: string) => {
+    const userDocRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+      setMyUser(userDoc.data() as MyUser);
+    }
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
+    const unsubscribe = onAuthStateChanged(auth, async user => {
       setUser(user);
+      if (user) {
+        // Only fetch user data if we don't have it
+        if (!myUser) {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            setMyUser(userDoc.data() as MyUser);
+          }
+
+          console.log('fetching user data', myUser);
+        }
+      } else {
+        setMyUser(null);
+      }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [myUser]);
 
   async function handleAuthOperation<T>(operation: AuthOperation<T>): Promise<T> {
     try {
@@ -57,8 +81,21 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
   }
 
+  const signInWithGoogle = async () => {
+    return await handleAuthOperation(async () => {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const userDoc = await createUserDocument(result.user);
+      setMyUser(userDoc);
+      return { result, userDoc };
+    });
+  };
+
   const signInWithEmail = async (email: string, password: string) => {
-    await handleAuthOperation(() => signInWithEmailAndPassword(auth, email, password));
+    await handleAuthOperation(async () => {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      await fetchUserData(result.user.uid);
+    });
   };
 
   const createUserDocument = async (firebaseUser: FirebaseUser, username?: string) => {
@@ -95,35 +132,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     });
   };
 
-  const signInWithGoogle = async () => {
-    return await handleAuthOperation(async () => {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const userDoc = await createUserDocument(result.user);
-      return { result, userDoc };
-    });
-  };
-
   const signUp = async (email: string, password: string, username: string) => {
-    // Validate input
-    if (!email || !password || !username) {
-      throw new Error('All fields are required');
-    }
-
-    if (username.length < 3) {
-      throw new Error('Username must be at least 3 characters long');
-    }
-
     await handleAuthOperation(async () => {
-      // Create auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await createUserDocument(userCredential.user, username);
+      const userDoc = await createUserDocument(userCredential.user, username);
+      setMyUser(userDoc);
       return userCredential;
     });
   };
 
   const signOut = async () => {
-    await handleAuthOperation(() => firebaseSignOut(auth));
+    await handleAuthOperation(() => {
+      setMyUser(null);
+      return firebaseSignOut(auth);
+    });
   };
 
   const updateUsername = async (username: string) => {
@@ -156,6 +178,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         },
         { merge: true }
       );
+
+      // Fetch the updated document to ensure we have the latest data
+      const updatedDoc = await getDoc(userDocRef);
+      if (updatedDoc.exists()) {
+        setMyUser(updatedDoc.data() as MyUser);
+      }
     });
   };
 
@@ -163,6 +191,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const value: AuthContextType = {
     firebaseUser: user,
+    myUser,
     loading,
     operationLoading,
     error,

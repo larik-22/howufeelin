@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import AuthRoute from '@/components/AuthRoute';
 import RootRedirect from '@/components/RootRedirect';
 import Loading from '@/components/Loading';
+
 // Lazy load pages
 const Authenticate = lazy(() =>
   import('@/pages/Authenticate').then(module => ({ default: module.default }))
@@ -12,6 +13,7 @@ const Authenticate = lazy(() =>
 const Dashboard = lazy(() =>
   import('@/pages/Dashboard').then(module => ({ default: module.default }))
 );
+const Test = lazy(() => import('@/pages/Test').then(module => ({ default: module.default })));
 
 export function hydrateFallback() {
   return <Loading isFullscreen />;
@@ -53,6 +55,19 @@ export const router = createBrowserRouter([
             element: (
               <Suspense fallback={<Loading isFullscreen />}>
                 <Dashboard />
+              </Suspense>
+            ),
+          },
+        ],
+      },
+      {
+        element: <ProtectedRoute />,
+        children: [
+          {
+            path: '/test',
+            element: (
+              <Suspense fallback={<Loading isFullscreen />}>
+                <Test />
               </Suspense>
             ),
           },

@@ -3,6 +3,7 @@ import { MyUser } from './MyUser';
 
 export interface AuthState {
   firebaseUser: User | null;
+  myUser: MyUser | null;
   loading: boolean;
   operationLoading: boolean;
   error: string | null;
