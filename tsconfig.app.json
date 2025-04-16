@@ -28,14 +28,14 @@
       "@/*": ["src/*"],
       "@assets/*": ["src/assets/*"],
       "@components/*": ["src/components/*"],
+      "@components/group/*": ["src/components/group/*"],
       "@types/*": ["src/types/*"],
       "@pages/*": ["src/pages/*"],
       "@layouts/*": ["src/layouts/*"],
       "@contexts/*": ["src/contexts/*"],
       "@utils/*": ["src/utils/*"],
       "@hooks/*": ["src/hooks/*"],
-      "@services/*": ["src/services/*"],
-      
+      "@services/*": ["src/services/*"]
     }
   },
   "include": ["src"]
