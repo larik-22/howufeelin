@@ -1,14 +1,21 @@
 import { Box, Button, IconButton, Tooltip, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import { Group } from '@/types/Group';
+import { GroupMemberRole } from '@/services/groupService';
 
 interface GroupHeaderProps {
-  groupName: string;
+  group: Group;
   onBack: () => void;
   onLeave: () => void;
+  currentUserId?: string;
 }
 
-export const GroupHeader = ({ groupName, onBack, onLeave }: GroupHeaderProps) => {
+export const GroupHeader = ({ group, onBack, onLeave, currentUserId }: GroupHeaderProps) => {
+  // Only show leave button if user is not the creator of the group
+  const canLeaveGroup =
+    group.userRole !== GroupMemberRole.ADMIN || group.createdBy !== currentUserId;
+
   return (
     <Box
       sx={{
@@ -44,25 +51,27 @@ export const GroupHeader = ({ groupName, onBack, onLeave }: GroupHeaderProps) =>
           px: { xs: 2, sm: 8 },
         }}
       >
-        {groupName}
+        {group.groupName}
       </Typography>
 
-      <Tooltip title="Leave Group">
-        <IconButton
-          color="error"
-          onClick={onLeave}
-          sx={{
-            position: { xs: 'static', sm: 'absolute' },
-            right: 0,
-            '&:hover': {
-              bgcolor: 'error.light',
-              color: 'white',
-            },
-          }}
-        >
-          <ExitToAppIcon />
-        </IconButton>
-      </Tooltip>
+      {canLeaveGroup && (
+        <Tooltip title="Leave Group">
+          <IconButton
+            color="error"
+            onClick={onLeave}
+            sx={{
+              position: { xs: 'static', sm: 'absolute' },
+              right: 0,
+              '&:hover': {
+                bgcolor: 'error.light',
+                color: 'white',
+              },
+            }}
+          >
+            <ExitToAppIcon />
+          </IconButton>
+        </Tooltip>
+      )}
     </Box>
   );
 };

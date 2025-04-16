@@ -5,6 +5,7 @@ export interface MyUser {
   username: string;
   email: string;
   displayName: string;
+  photoURL?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

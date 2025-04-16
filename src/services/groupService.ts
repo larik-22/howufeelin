@@ -34,6 +34,7 @@ interface GroupService {
   clearUserGroupsCache(userId?: string): void;
   getGroupMemberCount(groupId: string): Promise<number>;
   getGroupMemberCounts(groupIds: string[]): Promise<Record<string, number>>;
+  getGroupMembers(groupId: string): Promise<GroupMember[]>;
   updateGroup(groupId: string, updates: Partial<Group>): Promise<void>;
   joinGroup(joinCode: string, user: MyUser): Promise<Group>;
   deleteGroup(groupId: string, userId?: string): Promise<void>;
@@ -71,6 +72,7 @@ class FirestoreGroupService implements GroupService {
       displayName: user.displayName,
       role: GroupMemberRole.ADMIN,
       joinedAt: Timestamp.now(),
+      photoURL: user.photoURL,
     };
 
     await setDoc(doc(this.membersCollection, memberDocId), member);
@@ -173,6 +175,7 @@ class FirestoreGroupService implements GroupService {
       displayName: user.displayName,
       role,
       joinedAt: Timestamp.now(),
+      photoURL: user.photoURL,
     };
 
     await setDoc(doc(this.membersCollection, memberDocId), member);
@@ -233,6 +236,13 @@ class FirestoreGroupService implements GroupService {
     return counts;
   }
 
+  async getGroupMembers(groupId: string): Promise<GroupMember[]> {
+    const q = query(this.membersCollection, where('groupId', '==', groupId));
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map(doc => doc.data() as GroupMember);
+  }
+
   async updateGroup(groupId: string, updates: Partial<Group>): Promise<void> {
     const groupRef = doc(this.groupsCollection, groupId);
 
@@ -284,6 +294,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
+        photoURL: user.photoURL,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);

@@ -1,11 +1,12 @@
 import { useContext, useState, useEffect } from 'react';
 import { useParams, useNavigate, useLoaderData } from 'react-router';
-import { Box, Tabs, Tab, Badge, Snackbar, Alert } from '@mui/material';
+import { Box, Tabs, Tab, Snackbar, Alert, Skeleton, Card, CardContent } from '@mui/material';
 import dayjs from 'dayjs';
 
 import AuthContext from '@/contexts/auth/authContext';
-import { groupService, GroupMemberRole } from '@/services/groupService';
+import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
+import { GroupMember } from '@/types/GroupMember';
 import { useGroupPermissions } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -62,7 +63,7 @@ export default function GroupDetail() {
   const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs('2025-04-16'));
   const [activeTab, setActiveTab] = useState<number>(0);
   const [hasRatedToday, setHasRatedToday] = useState<boolean>(false);
-  const [hasLeftGroup, setHasLeftGroup] = useState<boolean>(false);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
 
   useEffect(() => {
     const fetchGroupData = async () => {
@@ -72,8 +73,11 @@ export default function GroupDetail() {
         setLoading(true);
         setError(null);
 
-        // Fetch member count
-        const count = await groupService.getGroupMemberCount(groupId);
+        // Fetch member count and group members in a single batch
+        const [count, members] = await Promise.all([
+          groupService.getGroupMemberCount(groupId),
+          groupService.getGroupMembers(groupId),
+        ]);
 
         // Fetch user's role in this group
         const userGroups = await groupService.getUserGroups(auth.myUser.userId);
@@ -91,6 +95,7 @@ export default function GroupDetail() {
           userRole: userGroup.userRole,
         });
         setMemberCount(count);
+        setGroupMembers(members);
 
         // Check if user has already rated today
         const today = dayjs().format('YYYY-MM-DD');
@@ -100,7 +105,7 @@ export default function GroupDetail() {
         setHasRatedToday(!!userRating);
       } catch (err) {
         console.error('Error fetching group data:', err);
-        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+        setError('Failed to load group data');
       } finally {
         setLoading(false);
       }
@@ -109,36 +114,51 @@ export default function GroupDetail() {
     fetchGroupData();
   }, [groupId, auth?.myUser?.userId, loaderGroup]);
 
-  const handleBackToGroups = () => {
+  const handleBackToDashboard = () => {
     navigate('/dashboard');
   };
 
   const handleCopyJoinCode = async (joinCode: string) => {
-    const success = await copyToClipboard(joinCode);
-    if (success) {
+    try {
+      await copyToClipboard(joinCode);
       setCopiedCode(joinCode);
       setNotification({
-        message: 'Join code copied to clipboard',
+        message: 'Join code copied to clipboard!',
         type: 'success',
+      });
+    } catch {
+      setNotification({
+        message: 'Failed to copy join code',
+        type: 'error',
       });
     }
   };
 
   const handleCloseNotification = () => {
     setNotification(null);
-    setCopiedCode(null);
   };
 
-  const handleLeaveGroup = () => {
-    setHasLeftGroup(true);
-    setNotification({
-      message: 'You have left the group',
-      type: 'info',
-    });
-    // In a real app, you would make an API call here
-    setTimeout(() => {
-      navigate('/dashboard');
-    }, 2000);
+  const handleLeaveGroup = async () => {
+    if (!groupId || !auth?.myUser?.userId) return;
+
+    try {
+      setLoading(true);
+      await groupService.removeMemberFromGroup(groupId, auth.myUser.userId);
+      setNotification({
+        message: 'You have left the group',
+        type: 'info',
+      });
+      setTimeout(() => {
+        navigate('/groups');
+      }, 1500);
+    } catch {
+      setNotification({
+        message: 'Failed to leave the group',
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDateChange = (date: dayjs.Dayjs | null) => {
@@ -152,113 +172,151 @@ export default function GroupDetail() {
   };
 
   const handleMoodSubmit = async (rating: number, note: string) => {
-    // This would be replaced with an actual API call to save the rating and note
+    // This would be implemented to save the mood rating to the backend
     console.log('Submitting mood:', { rating, note });
-    await new Promise(resolve => setTimeout(resolve, 1000));
     setHasRatedToday(true);
     setNotification({
-      message: 'Mood rating submitted successfully',
+      message: 'Mood rating submitted successfully!',
       type: 'success',
     });
   };
 
-  if (loading || !group) {
-    return null; // You might want to add a loading spinner here
-  }
-
-  if (error) {
+  if (loading) {
     return (
-      <Box sx={{ py: 3 }}>
-        <GroupHeader groupName="Error" onBack={handleBackToGroups} onLeave={handleLeaveGroup} />
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+      <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+        {/* Header Skeleton */}
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', mb: 3, position: 'relative', width: '100%' }}
+        >
+          <Skeleton variant="rectangular" width={100} height={40} sx={{ borderRadius: 1 }} />
+          <Skeleton variant="text" width="60%" height={40} sx={{ mx: 'auto' }} />
+          <Skeleton variant="circular" width={40} height={40} />
+        </Box>
+
+        {/* Group Details Skeleton */}
+        <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
+          <CardContent>
+            <Box
+              sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                <Skeleton variant="text" width={150} height={30} />
+              </Box>
+              <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 1 }} />
+            </Box>
+            <Skeleton variant="rectangular" width="100%" height={1} sx={{ mb: 2 }} />
+            <Skeleton variant="text" width="100%" height={60} sx={{ mb: 2 }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Skeleton variant="circular" width={20} height={20} sx={{ mr: 1 }} />
+              <Skeleton variant="text" width={100} height={20} />
+              <Box sx={{ display: 'flex', ml: 2 }}>
+                <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
+                <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
+                <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
+                <Skeleton variant="circular" width={30} height={30} />
+              </Box>
+            </Box>
+            <Skeleton variant="rectangular" width="100%" height={50} sx={{ borderRadius: 2 }} />
+          </CardContent>
+        </Card>
+
+        {/* Tabs Skeleton */}
+        <Box sx={{ display: 'flex', mb: 3 }}>
+          <Skeleton variant="rectangular" width={120} height={48} sx={{ mr: 2, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={120} height={48} sx={{ mr: 2, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={120} height={48} sx={{ borderRadius: 1 }} />
+        </Box>
+
+        {/* Content Skeleton */}
+        <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
+          <CardContent>
+            <Skeleton
+              variant="rectangular"
+              width="100%"
+              height={200}
+              sx={{ borderRadius: 2, mb: 2 }}
+            />
+            <Skeleton variant="rectangular" width="100%" height={300} sx={{ borderRadius: 2 }} />
+          </CardContent>
+        </Card>
       </Box>
     );
   }
 
-  const mockMembers = [
-    { name: 'John', role: 'ADMIN' as GroupMemberRole, avatar: '/static/images/avatar/1.jpg' },
-    { name: 'Jane', role: 'MODERATOR' as GroupMemberRole, avatar: '/static/images/avatar/2.jpg' },
-    { name: 'Bob', role: 'MEMBER' as GroupMemberRole, avatar: '/static/images/avatar/3.jpg' },
-    { name: 'Alice', role: 'MEMBER' as GroupMemberRole, avatar: '/static/images/avatar/4.jpg' },
-    { name: 'Charlie', role: 'MEMBER' as GroupMemberRole, avatar: '/static/images/avatar/5.jpg' },
-  ];
-
   return (
-    <Box sx={{ py: 3 }}>
-      <GroupHeader
-        groupName={group.groupName}
-        onBack={handleBackToGroups}
-        onLeave={handleLeaveGroup}
-      />
-
-      <GroupDetails
-        groupName={group.groupName}
-        groupDescription={group.groupDescription}
-        memberCount={memberCount}
-        joinCode={group.joinCode}
-        userRole={group.userRole}
-        onCopyJoinCode={handleCopyJoinCode}
-        copiedCode={copiedCode}
-        getRoleLabel={getRoleLabel}
-        getRoleColor={getRoleColor}
-      />
-
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          aria-label="group tabs"
-          variant="fullWidth"
-          sx={{
-            '& .MuiTab-root': {
-              fontWeight: 'bold',
-              textTransform: 'none',
-              fontSize: '1rem',
-            },
-          }}
-        >
-          <Tab
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Badge color="primary" variant="dot" invisible={!hasRatedToday} sx={{ mr: 1 }}>
-                  Rate Mood
-                </Badge>
-              </Box>
-            }
-            id="tab-0"
-            aria-controls="tabpanel-0"
-            disabled={hasLeftGroup}
+    <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+      {group && (
+        <>
+          <GroupHeader
+            group={group}
+            onBack={handleBackToDashboard}
+            onLeave={handleLeaveGroup}
+            currentUserId={auth?.myUser?.userId}
           />
-          <Tab label="Calendar" id="tab-1" aria-controls="tabpanel-1" />
-          <Tab label="Members" id="tab-2" aria-controls="tabpanel-2" />
-        </Tabs>
-      </Box>
 
-      <Box role="tabpanel" hidden={activeTab !== 0} id="tabpanel-0" aria-labelledby="tab-0">
-        {activeTab === 0 && <MoodInput hasRatedToday={hasRatedToday} onSubmit={handleMoodSubmit} />}
-      </Box>
-
-      <Box role="tabpanel" hidden={activeTab !== 1} id="tabpanel-1" aria-labelledby="tab-1">
-        {activeTab === 1 && (
-          <MoodCalendar
-            selectedDate={selectedDate}
-            onDateChange={handleDateChange}
-            ratings={mockUserRatings}
-          />
-        )}
-      </Box>
-
-      <Box role="tabpanel" hidden={activeTab !== 2} id="tabpanel-2" aria-labelledby="tab-2">
-        {activeTab === 2 && (
-          <GroupMembers
-            members={mockMembers}
+          <GroupDetails
+            group={group}
+            memberCount={memberCount}
+            onCopyJoinCode={handleCopyJoinCode}
+            copiedCode={copiedCode}
             getRoleLabel={getRoleLabel}
             getRoleColor={getRoleColor}
+            loading={loading}
+            groupMembers={groupMembers}
           />
-        )}
-      </Box>
+
+          <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 3 }}>
+            <Tab label="Today's Moods" />
+            <Tab label="Calendar" />
+            <Tab label="Members" />
+          </Tabs>
+
+          {activeTab === 0 && (
+            <Box>
+              {!hasRatedToday && (
+                <MoodInput onSubmit={handleMoodSubmit} hasRatedToday={hasRatedToday} />
+              )}
+              <MoodCalendar
+                ratings={mockUserRatings}
+                selectedDate={selectedDate}
+                onDateChange={handleDateChange}
+              />
+            </Box>
+          )}
+
+          {activeTab === 1 && (
+            <MoodCalendar
+              ratings={mockUserRatings}
+              selectedDate={selectedDate}
+              onDateChange={handleDateChange}
+            />
+          )}
+
+          {activeTab === 2 && (
+            <GroupMembers
+              members={groupMembers.map(member => ({
+                name: member.displayName,
+                role: member.role,
+                userId: member.userId,
+                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  member.displayName
+                )}&background=random`,
+                photoURL: member.photoURL,
+              }))}
+              getRoleLabel={getRoleLabel}
+              getRoleColor={getRoleColor}
+              loading={loading}
+            />
+          )}
+        </>
+      )}
+
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Snackbar
         open={!!notification}
@@ -269,7 +327,7 @@ export default function GroupDetail() {
         <Alert
           onClose={handleCloseNotification}
           severity={notification?.type || 'info'}
-          sx={{ width: '100%', borderRadius: 2 }}
+          sx={{ width: '100%' }}
         >
           {notification?.message}
         </Alert>

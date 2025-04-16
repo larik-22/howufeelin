@@ -8,4 +8,5 @@ export interface GroupMember {
   displayName: string;
   role: GroupMemberRole;
   joinedAt: Timestamp;
+  photoURL?: string; // Optional field for user's profile image URL
 }

@@ -9,33 +9,35 @@ import {
   Button,
   Avatar,
   AvatarGroup,
+  Skeleton,
 } from '@mui/material';
 import GroupIcon from '@mui/icons-material/Group';
 import PeopleIcon from '@mui/icons-material/People';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { GroupMemberRole } from '@/services/groupService';
+import { Group } from '@/types/Group';
+import { GroupMember } from '@/types/GroupMember';
 
 interface GroupDetailsProps {
-  groupName: string;
-  groupDescription: string;
+  group: Group;
   memberCount: number;
-  joinCode: string;
-  userRole?: GroupMemberRole;
   onCopyJoinCode: (code: string) => void;
   copiedCode: string | null;
   getRoleLabel: (role?: GroupMemberRole) => string;
   getRoleColor: (role?: GroupMemberRole) => 'primary' | 'secondary' | 'default';
+  loading?: boolean;
+  groupMembers?: GroupMember[];
 }
 
 export const GroupDetails = ({
-  groupDescription,
+  group,
   memberCount,
-  joinCode,
-  userRole,
   onCopyJoinCode,
   copiedCode,
   getRoleLabel,
   getRoleColor,
+  loading = false,
+  groupMembers = [],
 }: GroupDetailsProps) => {
   return (
     <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
@@ -46,28 +48,44 @@ export const GroupDetails = ({
             <Typography variant="h6">Group Details</Typography>
           </Box>
           <Chip
-            label={getRoleLabel(userRole)}
-            color={getRoleColor(userRole)}
+            label={getRoleLabel(group.userRole)}
+            color={getRoleColor(group.userRole)}
             size="small"
             sx={{ fontWeight: 'bold' }}
           />
         </Box>
         <Divider sx={{ mb: 2 }} />
         <Typography variant="body1" sx={{ mb: 2 }}>
-          {groupDescription || 'No description provided.'}
+          {group.groupDescription || 'No description provided.'}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <PeopleIcon sx={{ mr: 1, fontSize: '1.2rem', color: 'primary.main' }} />
           <Typography variant="body2">
             {memberCount} {memberCount === 1 ? 'member' : 'members'}
           </Typography>
-          <AvatarGroup max={4} sx={{ ml: 2 }}>
-            <Avatar alt="John" src="/static/images/avatar/1.jpg" />
-            <Avatar alt="Jane" src="/static/images/avatar/2.jpg" />
-            <Avatar alt="Bob" src="/static/images/avatar/3.jpg" />
-            <Avatar alt="Alice" src="/static/images/avatar/4.jpg" />
-            <Avatar alt="Charlie" src="/static/images/avatar/5.jpg" />
-          </AvatarGroup>
+          {loading ? (
+            <Box sx={{ display: 'flex', ml: 2 }}>
+              <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
+              <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
+              <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
+              <Skeleton variant="circular" width={30} height={30} />
+            </Box>
+          ) : (
+            <AvatarGroup max={4} sx={{ ml: 2 }}>
+              {groupMembers.map((member: GroupMember, index: number) => (
+                <Avatar
+                  key={index}
+                  alt={member.displayName}
+                  src={
+                    member.photoURL ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      member.displayName
+                    )}&background=random`
+                  }
+                />
+              ))}
+            </AvatarGroup>
+          )}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Paper
@@ -77,7 +95,8 @@ export const GroupDetails = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: copiedCode === joinCode ? 'action.selected' : 'background.paper',
+              backgroundColor:
+                copiedCode === group.joinCode ? 'action.selected' : 'background.paper',
               borderRadius: 2,
               borderColor: 'primary.main',
               width: '100%',
@@ -92,17 +111,14 @@ export const GroupDetails = ({
                 fontSize: { xs: '0.875rem', sm: '1rem' },
               }}
             >
-              {joinCode}
+              {group.joinCode}
             </Typography>
             <Button
               size="small"
               startIcon={<ContentCopyIcon />}
-              onClick={() => onCopyJoinCode(joinCode)}
-              variant="text"
-              color="primary"
-              sx={{ ml: 1 }}
+              onClick={() => onCopyJoinCode(group.joinCode)}
             >
-              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>Copy</Box>
+              {copiedCode === group.joinCode ? 'Copied!' : 'Copy'}
             </Button>
           </Paper>
         </Box>
