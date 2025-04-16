@@ -351,16 +351,7 @@ export default function Groups() {
             >
               Manage Members
             </Button>
-          ) : (
-            <Button
-              size="small"
-              color="primary"
-              disabled
-              onClick={e => e.stopPropagation()} // Prevent card click when clicking disabled button
-            >
-              {isDeletingThisGroup ? 'Deleting...' : 'View Members'}
-            </Button>
-          )}
+          ) : null}
         </CardActions>
       </Card>
     );

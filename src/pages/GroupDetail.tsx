@@ -1,6 +1,21 @@
 import { useContext, useState, useEffect } from 'react';
 import { useParams, useNavigate, useLoaderData } from 'react-router';
-import { Box, Tabs, Tab, Snackbar, Alert, Skeleton, Card, CardContent } from '@mui/material';
+import {
+  Box,
+  Tabs,
+  Tab,
+  Snackbar,
+  Alert,
+  Skeleton,
+  Card,
+  CardContent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  CircularProgress,
+} from '@mui/material';
 import dayjs from 'dayjs';
 
 import AuthContext from '@/contexts/auth/authContext';
@@ -8,6 +23,7 @@ import { groupService } from '@/services/groupService';
 import { ratingService, RatingError } from '@/services/ratingService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
+import { GroupMemberRole } from '@/services/groupService';
 import { Rating } from '@/types/Rating';
 import { useGroupPermissions } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -24,6 +40,13 @@ interface Notification {
   type: 'success' | 'error' | 'info';
 }
 
+interface LoaderData {
+  group: Group;
+  memberCount: number;
+  members: GroupMember[];
+  userRole: GroupMemberRole;
+}
+
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
@@ -31,10 +54,13 @@ export default function GroupDetail() {
   const { getRoleColor, getRoleLabel } = useGroupPermissions();
 
   // Get the group data from the loader
-  const { group: loaderGroup } = useLoaderData() as { group: Group };
+  const loaderData = useLoaderData() as LoaderData;
+  const { group: loaderGroup, memberCount: loaderMemberCount, members: loaderMembers } = loaderData;
 
-  const [group, setGroup] = useState<Group | null>(loaderGroup || null);
-  const [memberCount, setMemberCount] = useState<number>(0);
+  // Initialize state with loader data
+  const [group] = useState<Group | null>(loaderGroup || null);
+  const [memberCount] = useState<number>(loaderMemberCount || 0);
+  const [groupMembers] = useState<GroupMember[]>(loaderMembers || []);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -42,12 +68,15 @@ export default function GroupDetail() {
   const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
   const [activeTab, setActiveTab] = useState<number>(0);
   const [hasRatedToday, setHasRatedToday] = useState<boolean>(false);
-  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
   const [todayRatings, setTodayRatings] = useState<Rating[]>([]);
   const [calendarRatings, setCalendarRatings] = useState<Rating[]>([]);
 
+  // New states for leave group confirmation modal
+  const [leaveGroupModalOpen, setLeaveGroupModalOpen] = useState<boolean>(false);
+  const [leaveGroupLoading, setLeaveGroupLoading] = useState<boolean>(false);
+
   useEffect(() => {
-    const fetchGroupData = async () => {
+    const fetchRatingData = async () => {
       if (!groupId || !auth?.myUser?.userId) return;
       if (!auth.myUser) return;
 
@@ -55,32 +84,23 @@ export default function GroupDetail() {
         setLoading(true);
         setError(null);
 
-        // Fetch all data in parallel using Promise.all
-        const [groupData, ratingData] = await Promise.all([
-          groupService.getGroupDetailData(groupId, auth.myUser.userId),
-          ratingService.getGroupDetailRatings(groupId, auth.myUser.userId),
-        ]);
+        // Only fetch rating data, since we already have group data from the loader
+        const ratingData = await ratingService.getGroupDetailRatings(groupId, auth.myUser.userId);
 
-        // Update all state at once to minimize re-renders
-        setGroup({
-          ...groupData.group,
-          userRole: groupData.userRole,
-        });
-        setMemberCount(groupData.memberCount);
-        setGroupMembers(groupData.members);
+        // Update rating-related state
         setHasRatedToday(ratingData.hasRatedToday);
         setTodayRatings(ratingData.todayRatings);
         setCalendarRatings(ratingData.calendarRatings);
       } catch (err) {
-        console.error('Error fetching group data:', err);
-        setError(`Failed to load group data: ${err instanceof Error ? err.message : String(err)}`);
+        console.error('Error fetching rating data:', err);
+        setError(`Failed to load rating data: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchGroupData();
-  }, [groupId, auth?.myUser?.userId, loaderGroup]);
+    fetchRatingData();
+  }, [groupId, auth?.myUser?.userId]);
 
   const handleBackToDashboard = () => {
     navigate('/dashboard');
@@ -106,27 +126,45 @@ export default function GroupDetail() {
     setNotification(null);
   };
 
-  // TODO: Fix this (example logic for now, no timeouts should be used)
+  // Show the leave group confirmation modal
+  const handleLeaveGroupClick = () => {
+    setLeaveGroupModalOpen(true);
+  };
+
+  // Close the leave group confirmation modal
+  const handleCloseLeaveGroupModal = () => {
+    setLeaveGroupModalOpen(false);
+  };
+
+  // Handle the actual leaving process
   const handleLeaveGroup = async () => {
     if (!groupId || !auth?.myUser?.userId) return;
 
     try {
-      setLoading(true);
+      setLeaveGroupLoading(true);
       await groupService.removeMemberFromGroup(groupId, auth.myUser.userId);
+
+      // Close the modal
+      setLeaveGroupModalOpen(false);
+
+      // Show success notification
       setNotification({
         message: 'You have left the group',
-        type: 'info',
+        type: 'success',
       });
+
+      // Navigate to dashboard after a short delay
       setTimeout(() => {
-        navigate('/groups');
-      }, 1500);
-    } catch {
+        navigate('/dashboard');
+      }, 1000);
+    } catch (error) {
+      console.error('Error leaving group:', error);
       setNotification({
         message: 'Failed to leave the group',
         type: 'error',
       });
     } finally {
-      setLoading(false);
+      setLeaveGroupLoading(false);
     }
   };
 
@@ -261,7 +299,7 @@ export default function GroupDetail() {
           <GroupHeader
             group={group}
             onBack={handleBackToDashboard}
-            onLeave={handleLeaveGroup}
+            onLeave={handleLeaveGroupClick}
             currentUserId={auth?.myUser?.userId}
           />
 
@@ -306,6 +344,7 @@ export default function GroupDetail() {
               }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
+              isLoading={loading}
             />
           )}
 
@@ -348,6 +387,40 @@ export default function GroupDetail() {
           {notification?.message}
         </Alert>
       </Snackbar>
+
+      {/* Leave Group Confirmation Modal */}
+      <Dialog
+        open={leaveGroupModalOpen}
+        onClose={!leaveGroupLoading ? handleCloseLeaveGroupModal : undefined}
+        aria-labelledby="leave-group-dialog-title"
+        aria-describedby="leave-group-dialog-description"
+        disableEscapeKeyDown={leaveGroupLoading}
+      >
+        <DialogTitle id="leave-group-dialog-title">Leave Group</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            {leaveGroupLoading ? <CircularProgress size={24} sx={{ mr: 2 }} /> : null}
+            <Box>
+              Are you sure you want to leave "{group?.groupName}"? You will need to be invited again
+              to rejoin.
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseLeaveGroupModal} disabled={leaveGroupLoading} color="primary">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleLeaveGroup}
+            color="error"
+            variant="contained"
+            disabled={leaveGroupLoading}
+            startIcon={leaveGroupLoading ? <CircularProgress size={20} color="inherit" /> : null}
+          >
+            {leaveGroupLoading ? 'Leaving...' : 'Leave Group'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

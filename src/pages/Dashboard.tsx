@@ -1,12 +1,33 @@
-import { useContext } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
-import { Typography, Box, Paper, Button } from '@mui/material';
+import { Typography, Box, Paper, Button, Alert, Snackbar } from '@mui/material';
 import Groups from './Groups';
 import { useNavigate } from 'react-router';
 
 export default function Dashboard() {
   const auth = useContext(AuthContext);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'error' | 'info' | 'success';
+  } | null>(null);
+
+  useEffect(() => {
+    // Check for error parameter in URL
+    const error = searchParams.get('error');
+    if (error === 'not_member') {
+      setNotification({
+        message: 'You are not a member of this group or have been removed from it.',
+        type: 'error',
+      });
+    }
+  }, [searchParams]);
+
+  const handleCloseNotification = () => {
+    setNotification(null);
+  };
 
   if (!auth || !auth.firebaseUser) return null;
 
@@ -47,6 +68,21 @@ export default function Dashboard() {
 
       <Groups />
       <Button onClick={() => navigate('/test')}>Go to test</Button>
+
+      <Snackbar
+        open={!!notification}
+        autoHideDuration={6000}
+        onClose={handleCloseNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseNotification}
+          severity={notification?.type || 'info'}
+          sx={{ width: '100%' }}
+        >
+          {notification?.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

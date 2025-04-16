@@ -8,6 +8,7 @@ import Loading from '@/components/Loading';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import DashboardBaseLayout from '@/layouts/DashboardBaseLayout';
 import { groupService } from '@/services/groupService';
+import { getAuth } from 'firebase/auth';
 
 // Lazy load pages
 const Authenticate = lazy(() =>
@@ -28,16 +29,24 @@ export function hydrateFallback() {
   return <Loading isFullscreen />;
 }
 
-// Group loader function to validate group existence
+// Group loader function to validate group existence and user membership
 async function groupLoader({ params }: LoaderFunctionArgs) {
   const groupId = params.groupId;
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
 
   // If groupId is undefined, redirect to 404
   if (!groupId) {
     return redirect('/404');
   }
 
+  // If user is not authenticated, they will be redirected by ProtectedRoute
+  if (!currentUser) {
+    return null;
+  }
+
   try {
+    // First check if the group exists
     const group = await groupService.getGroupById(groupId);
 
     if (!group) {
@@ -45,7 +54,27 @@ async function groupLoader({ params }: LoaderFunctionArgs) {
       return redirect('/404');
     }
 
-    return { group };
+    // Then check if the user is a member of the group and get full group data
+    try {
+      // This will throw an error if the user is not a member
+      const groupDetailData = await groupService.getGroupDetailData(groupId, currentUser.uid);
+
+      // If we get here, the user is a member of the group
+      return {
+        group: groupDetailData.group,
+        memberCount: groupDetailData.memberCount,
+        members: groupDetailData.members,
+        userRole: groupDetailData.userRole,
+      };
+    } catch (error) {
+      // User is not a member of the group, redirect to dashboard
+      console.warn(
+        `User ${currentUser.uid} attempted to access group ${groupId} but is not a member: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return redirect('/dashboard?error=not_member');
+    }
   } catch (error) {
     console.error('Error loading group:', error);
     return redirect('/404');

@@ -193,6 +193,9 @@ class FirestoreGroupService implements GroupService {
   async removeMemberFromGroup(groupId: string, userId: string): Promise<void> {
     const memberDocId = `${groupId}_${userId}`;
     await deleteDoc(doc(this.membersCollection, memberDocId));
+
+    // Clear the cache for the user who left the group
+    this.clearUserGroupsCache(userId);
   }
 
   async updateMemberRole(groupId: string, userId: string, role: GroupMemberRole): Promise<void> {
