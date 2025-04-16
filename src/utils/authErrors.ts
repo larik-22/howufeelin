@@ -1,6 +1,15 @@
 export interface FirebaseError {
   code: string;
   message: string;
+  email?: string;
+  credential?: Record<string, unknown>;
+}
+
+export class AuthError extends Error {
+  constructor(message: string, public code: string, public originalError?: unknown) {
+    super(message);
+    this.name = 'AuthError';
+  }
 }
 
 export const AUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -19,19 +28,41 @@ export const AUTH_ERROR_MESSAGES: Record<string, string> = {
   'auth/popup-closed-by-user': 'Sign in was cancelled',
   'auth/popup-blocked': 'Popup was blocked by your browser. Please allow popups for this site.',
   'auth/network-request-failed': 'Network error. Please check your connection and try again.',
+  'auth/requires-recent-login':
+    'This operation requires recent authentication. Please sign out and sign in again.',
+  'auth/credential-already-in-use':
+    'This credential is already associated with a different user account.',
+  'auth/provider-already-linked': 'This provider is already linked to your account.',
+  'auth/no-such-provider': 'This provider is not linked to your account.',
 };
 
-export function getAuthErrorMessage(error: unknown): string {
+export function createAuthError(error: unknown): AuthError {
+  if (error instanceof AuthError) {
+    return error;
+  }
+
   if (error && typeof error === 'object' && 'code' in error) {
     const firebaseError = error as FirebaseError;
-    if (firebaseError.code && AUTH_ERROR_MESSAGES[firebaseError.code]) {
-      return AUTH_ERROR_MESSAGES[firebaseError.code];
-    }
+    const message = AUTH_ERROR_MESSAGES[firebaseError.code] || firebaseError.message;
+    return new AuthError(message, firebaseError.code, error);
   }
 
   if (error instanceof Error) {
-    return error.message;
+    return new AuthError(error.message, 'unknown', error);
   }
 
-  return 'An unexpected error occurred. Please try again.';
+  return new AuthError('An unexpected error occurred. Please try again.', 'unknown', error);
+}
+
+export function isAuthError(error: unknown): error is AuthError {
+  return error instanceof AuthError;
+}
+
+export function isFirebaseError(error: unknown): error is FirebaseError {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      typeof (error as FirebaseError).code === 'string'
+  );
 }

@@ -7,13 +7,15 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   User as FirebaseUser,
+  EmailAuthProvider,
+  linkWithCredential,
 } from 'firebase/auth';
 import { auth, db } from '@/firebase.ts';
 import AuthContext from './authContext';
 import { AuthContextType } from '@/types/auth';
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { MyUser } from '@/types/MyUser';
-import { getAuthErrorMessage } from '@/utils/authErrors';
+import { createAuthError } from '@/utils/authErrors';
 
 type AuthOperation<T> = () => Promise<T>;
 
@@ -38,7 +40,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       setError(null);
       return await operation();
     } catch (err) {
-      setError(getAuthErrorMessage(err));
+      const authError = createAuthError(err);
+      setError(authError.message);
       throw err; // Re-throw to allow component to handle the error
     } finally {
       setOperationLoading(false);
@@ -68,6 +71,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
       await setDoc(userDocRef, newUser);
     }
+  };
+
+  const linkEmailPassword = async (password: string) => {
+    if (!auth.currentUser?.email) {
+      throw new Error('No email available for linking');
+    }
+
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+
+    await handleAuthOperation(async () => {
+      await linkWithCredential(auth.currentUser!, credential);
+    });
   };
 
   const signInWithGoogle = async () => {
@@ -113,6 +128,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     signUp,
     signOut,
     clearError,
+    linkEmailPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

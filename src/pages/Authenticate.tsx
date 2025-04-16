@@ -1,6 +1,7 @@
 import { useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
+import { createAuthError } from '@/utils/authErrors';
 import {
   Box,
   Button,
@@ -14,6 +15,10 @@ import {
   IconButton,
   InputAdornment,
   Link,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
@@ -31,6 +36,10 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
   const [showPassword, setShowPassword] = useState(false);
   const [isRegister, setIsRegister] = useState(initialIsRegister);
   const [name, setName] = useState('');
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [linkPassword, setLinkPassword] = useState('');
+  const [error, setError] = useState('');
+  const [dialogError, setDialogError] = useState('');
 
   // Update isRegister state when URL changes
   useEffect(() => {
@@ -48,8 +57,31 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
         await auth.signInWithEmail(email, password);
       }
     } catch (error) {
-      // Error is already handled by the auth provider
-      console.error('Auth operation failed:', error);
+      const authError = createAuthError(error);
+      setError(authError.message);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await auth.signInWithGoogle();
+      setShowPasswordDialog(true);
+      setDialogError('');
+    } catch (error) {
+      const authError = createAuthError(error);
+      setError(authError.message);
+    }
+  };
+
+  const handleLinkPassword = async () => {
+    try {
+      await auth.linkEmailPassword(linkPassword);
+      setShowPasswordDialog(false);
+      setLinkPassword('');
+      setDialogError('');
+    } catch (error) {
+      const authError = createAuthError(error);
+      setDialogError(authError.message);
     }
   };
 
@@ -73,7 +105,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
           sx={{
             p: 4,
             width: '100%',
-            maxWidth: 400,
+            maxWidth: 420,
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
@@ -86,9 +118,9 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
             {isRegister ? 'Sign up to get started' : 'Sign in to continue'}
           </Typography>
 
-          {auth.error && (
+          {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {auth.error}
+              {error}
             </Alert>
           )}
 
@@ -171,7 +203,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
             variant="contained"
             size="large"
             startIcon={<GoogleIcon sx={{ color: 'white' }} />}
-            onClick={auth.signInWithGoogle}
+            onClick={handleGoogleSignIn}
             disabled={auth.operationLoading}
             sx={{
               color: 'white',
@@ -197,6 +229,42 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
           </Box>
         </Paper>
       </Box>
+
+      <Dialog open={showPasswordDialog} onClose={() => setShowPasswordDialog(false)}>
+        <DialogTitle>Set a Password</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            To enable email/password sign-in, please set a password for your account.
+          </Typography>
+          {dialogError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {dialogError}
+            </Alert>
+          )}
+          <TextField
+            label="Password"
+            type="password"
+            value={linkPassword}
+            onChange={e => setLinkPassword(e.target.value)}
+            fullWidth
+            required
+            disabled={auth.operationLoading}
+            error={!!dialogError}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPasswordDialog(false)} disabled={auth.operationLoading}>
+            Skip
+          </Button>
+          <Button
+            onClick={handleLinkPassword}
+            disabled={!linkPassword || auth.operationLoading}
+            variant="contained"
+          >
+            {auth.operationLoading ? <CircularProgress size={24} /> : 'Set Password'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

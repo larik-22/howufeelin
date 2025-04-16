@@ -16,11 +16,11 @@ export default function AuthRoute({ children }: { children: React.ReactNode }) {
     return <Loading />;
   }
 
-  // If user is authenticated, redirect to dashboard
-  if (auth.user) {
+  // If user is authenticated and has a password provider, redirect to dashboard
+  if (auth.user && auth.user.providerData.some(provider => provider.providerId === 'password')) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // If user is not authenticated, show the auth page
+  // If user is not authenticated or needs to set password, show the auth page
   return <>{children}</>;
 }
