@@ -34,6 +34,7 @@ interface GroupService {
   getGroupMemberCount(groupId: string): Promise<number>;
   getGroupMemberCounts(groupIds: string[]): Promise<Record<string, number>>;
   updateGroup(groupId: string, updates: Partial<Group>): Promise<void>;
+  joinGroup(joinCode: string, user: MyUser): Promise<Group>;
 }
 
 class FirestoreGroupService implements GroupService {
@@ -64,6 +65,8 @@ class FirestoreGroupService implements GroupService {
     const member: GroupMember = {
       groupId,
       userId: user.userId,
+      email: user.email,
+      displayName: user.displayName,
       role: GroupMemberRole.ADMIN,
       joinedAt: Timestamp.now(),
     };
@@ -121,6 +124,13 @@ class FirestoreGroupService implements GroupService {
       return [];
     }
 
+    // Create a map of groupId to role
+    const roleMap = new Map<string, GroupMemberRole>();
+    memberDocs.docs.forEach(doc => {
+      const data = doc.data() as GroupMember;
+      roleMap.set(data.groupId, data.role);
+    });
+
     // Extract all group IDs
     const groupIds = memberDocs.docs.map(doc => doc.data().groupId);
 
@@ -128,8 +138,14 @@ class FirestoreGroupService implements GroupService {
     const groupsQuery = query(this.groupsCollection, where('groupId', 'in', groupIds));
     const groupDocs = await getDocs(groupsQuery);
 
-    // Map the results to Group objects
-    const groups = groupDocs.docs.map(doc => doc.data() as Group);
+    // Map the results to Group objects and add role information
+    const groups = groupDocs.docs.map(doc => {
+      const groupData = doc.data() as Group;
+      return {
+        ...groupData,
+        userRole: roleMap.get(groupData.groupId) || GroupMemberRole.MEMBER,
+      };
+    });
 
     // Cache the result
     this.userGroupsCache[userId] = { groups, timestamp: now };
@@ -151,6 +167,8 @@ class FirestoreGroupService implements GroupService {
     const member: GroupMember = {
       groupId,
       userId: user.userId,
+      email: user.email,
+      displayName: user.displayName,
       role,
       joinedAt: Timestamp.now(),
     };
@@ -226,6 +244,56 @@ class FirestoreGroupService implements GroupService {
 
     // Clear cache for all users who might have this group
     this.clearUserGroupsCache();
+  }
+
+  async joinGroup(joinCode: string, user: MyUser): Promise<Group> {
+    try {
+      // First, find the group by join code
+      const groupsRef = collection(db, 'groups');
+      const q = query(groupsRef, where('joinCode', '==', joinCode));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        throw new Error('Group not found');
+      }
+
+      const groupDoc = querySnapshot.docs[0];
+      const groupId = groupDoc.id;
+      const groupData = groupDoc.data() as Group;
+
+      // Check if user is trying to join their own group
+      if (groupData.createdBy === user.userId) {
+        throw new Error('You cannot join your own group');
+      }
+
+      // Check if user is already a member using the members collection
+      const memberDocId = `${groupId}_${user.userId}`;
+      const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+
+      if (memberDoc.exists()) {
+        throw new Error('Already a member of this group');
+      }
+
+      // Add user to group members with a single write operation
+      const member: GroupMember = {
+        groupId,
+        userId: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+        role: GroupMemberRole.MEMBER,
+        joinedAt: Timestamp.now(),
+      };
+
+      await setDoc(doc(this.membersCollection, memberDocId), member);
+
+      // Clear the cache for this user to ensure fresh data
+      this.clearUserGroupsCache(user.userId);
+
+      return groupData;
+    } catch (error) {
+      console.error('Error joining group:', error);
+      throw error;
+    }
   }
 }
 
