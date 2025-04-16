@@ -1,8 +1,9 @@
 import { Timestamp } from 'firebase/firestore';
+import { GroupMemberRole } from '@/services/groupService';
 
 export interface GroupMember {
-  role: 'member' | 'moderator' | 'admin';
-  status: 'active' | 'pending' | 'invited' | 'banned';
-  joinDate: Timestamp;
-  displayName?: string;
+  groupId: string; // For querying members of a group
+  userId: string; // For querying user's groups
+  role: GroupMemberRole;
+  joinedAt: Timestamp;
 }

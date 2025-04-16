@@ -11,56 +11,42 @@ import {
 import { db } from '@/firebase';
 import { MyUser } from '@/types/MyUser';
 
-export interface DatabaseService {
+export interface UserService {
   getUserById(userId: string): Promise<MyUser | null>;
   createUser(user: MyUser): Promise<void>;
   updateUser(userId: string, data: Partial<MyUser>): Promise<void>;
   isUsernameTaken(username: string, excludeUserId?: string): Promise<boolean>;
 }
 
-class FirestoreService implements DatabaseService {
+class FirestoreUserService implements UserService {
+  private usersCollection = collection(db, 'users');
+
   async getUserById(userId: string): Promise<MyUser | null> {
-    const userDocRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userDocRef);
+    const userDoc = await getDoc(doc(this.usersCollection, userId));
     return userDoc.exists() ? (userDoc.data() as MyUser) : null;
   }
 
   async createUser(user: MyUser): Promise<void> {
-    const userDocRef = doc(db, 'users', user.userId);
-    await setDoc(userDocRef, {
-      ...user,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
+    await setDoc(doc(this.usersCollection, user.userId), user);
   }
 
   async updateUser(userId: string, data: Partial<MyUser>): Promise<void> {
-    const userDocRef = doc(db, 'users', userId);
-    await setDoc(
-      userDocRef,
-      {
-        ...data,
-        updatedAt: Timestamp.now(),
-      },
-      { merge: true }
-    );
+    const userRef = doc(this.usersCollection, userId);
+    await setDoc(userRef, { ...data, updatedAt: Timestamp.now() }, { merge: true });
   }
 
   async isUsernameTaken(username: string, excludeUserId?: string): Promise<boolean> {
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('username', '==', username.toLowerCase()));
+    const q = query(this.usersCollection, where('username', '==', username));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) return false;
 
-    // If we have an excludeUserId, check if the found document belongs to that user
     if (excludeUserId) {
-      const existingUser = querySnapshot.docs[0];
-      return existingUser.id !== excludeUserId;
+      return querySnapshot.docs.some(doc => doc.id !== excludeUserId);
     }
 
     return true;
   }
 }
 
-export const databaseService: DatabaseService = new FirestoreService();
+export const userService: UserService = new FirestoreUserService();

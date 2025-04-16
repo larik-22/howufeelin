@@ -10,7 +10,7 @@ export default function DashboardBaseLayout({ children }: DashboardBaseLayoutPro
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navbar />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
         {children}
       </Container>
     </Box>

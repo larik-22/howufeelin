@@ -1,64 +1,54 @@
-import { useContext, useState } from 'react';
+import { useContext } from 'react';
 import AuthContext from '@/contexts/auth/authContext';
 import DashboardBaseLayout from '@/layouts/DashboardBaseLayout';
-import { Typography, Tabs, Tab, Box } from '@mui/material';
-import Test from './Test';
+import { Typography, Box, Paper, Button } from '@mui/material';
 import Groups from './Groups';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`dashboard-tabpanel-${index}`}
-      aria-labelledby={`dashboard-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+import { useNavigate } from 'react-router';
 
 export default function Dashboard() {
   const auth = useContext(AuthContext);
-  const [tabValue, setTabValue] = useState(0);
+  const navigate = useNavigate();
 
   if (!auth || !auth.firebaseUser) return null;
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
   return (
     <DashboardBaseLayout>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Dashboard
-      </Typography>
-      <Typography variant="body1" color="text.secondary" paragraph>
-        Welcome, {auth.myUser?.displayName}
-      </Typography>
+      <Box sx={{ maxWidth: 'lg', mx: 'auto', px: 1, py: 4 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: 3,
+            mb: 4,
+            background:
+              'linear-gradient(to right, rgba(143, 197, 163, 0.1), rgba(143, 197, 163, 0.05))',
+            borderRadius: 2,
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontWeight: 500,
+              mb: 1,
+              color: 'text.primary',
+            }}
+          >
+            Welcome back, {auth.myUser?.displayName}
+          </Typography>
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{
+              fontSize: '1.1rem',
+              lineHeight: 1.5,
+            }}
+          >
+            Here's an overview of your groups
+          </Typography>
+        </Paper>
 
-      <Box sx={{ width: '100%' }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="dashboard tabs">
-            <Tab label="Groups" id="dashboard-tab-0" aria-controls="dashboard-tabpanel-0" />
-            <Tab label="Test" id="dashboard-tab-1" aria-controls="dashboard-tabpanel-1" />
-          </Tabs>
-        </Box>
-        <TabPanel value={tabValue} index={0}>
-          <Groups />
-        </TabPanel>
-        <TabPanel value={tabValue} index={1}>
-          <Test />
-        </TabPanel>
+        <Groups />
+        <Button onClick={() => navigate('/test')}>Go to test</Button>
       </Box>
     </DashboardBaseLayout>
   );

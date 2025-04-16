@@ -16,7 +16,7 @@ import AuthContext from './authContext';
 import { AuthContextType } from '@/types/Auth';
 import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
-import { databaseService } from '@/services/database';
+import { userService } from '@/services/userService';
 
 type AuthOperation<T> = () => Promise<T>;
 
@@ -28,7 +28,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [error, setError] = useState<string | null>(null);
 
   const fetchUserData = async (userId: string) => {
-    const userData = await databaseService.getUserById(userId);
+    const userData = await userService.getUserById(userId);
     if (userData) {
       setMyUser(userData);
     }
@@ -82,7 +82,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const createUserDocument = async (firebaseUser: FirebaseUser, username?: string) => {
-    const existingUser = await databaseService.getUserById(firebaseUser.uid);
+    const existingUser = await userService.getUserById(firebaseUser.uid);
 
     if (!existingUser) {
       const newUser: MyUser = {
@@ -95,7 +95,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         updatedAt: Timestamp.now(),
       };
 
-      await databaseService.createUser(newUser);
+      await userService.createUser(newUser);
       return newUser;
     }
     return existingUser;
@@ -135,17 +135,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
 
     await handleAuthOperation(async () => {
-      const isTaken = await databaseService.isUsernameTaken(username, auth.currentUser!.uid);
+      const isTaken = await userService.isUsernameTaken(username, auth.currentUser!.uid);
       if (isTaken) {
         throw new AuthError('Username is already taken', 'username/taken');
       }
 
-      await databaseService.updateUser(auth.currentUser!.uid, {
+      await userService.updateUser(auth.currentUser!.uid, {
         username,
         displayName: username,
       });
 
-      const updatedUser = await databaseService.getUserById(auth.currentUser!.uid);
+      const updatedUser = await userService.getUserById(auth.currentUser!.uid);
       if (updatedUser) {
         setMyUser(updatedUser);
       }
