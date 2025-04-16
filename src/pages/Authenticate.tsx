@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AuthenticateProps {
   isRegister?: boolean;
@@ -74,7 +75,8 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
       const email = auth.user?.email;
       if (email) {
         const baseUsername = email.split('@')[0];
-        setGoogleUsername(baseUsername);
+        const username = baseUsername + '-' + uuidv4().slice(0, 4);
+        setGoogleUsername(username);
       }
     } catch (error) {
       const authError = createAuthError(error);
@@ -305,7 +307,13 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
         </DialogContent>
         <DialogActions>
           {dialogStep === 'password' && (
-            <Button onClick={() => setShowPasswordDialog(false)} disabled={auth.operationLoading}>
+            <Button
+              onClick={() => {
+                setShowPasswordDialog(false);
+                navigate('/dashboard');
+              }}
+              disabled={auth.operationLoading}
+            >
               Skip
             </Button>
           )}
