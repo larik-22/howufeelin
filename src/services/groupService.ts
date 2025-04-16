@@ -9,6 +9,7 @@ import {
   Timestamp,
   deleteDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Group } from '@/types/Group';
@@ -35,6 +36,7 @@ interface GroupService {
   getGroupMemberCounts(groupIds: string[]): Promise<Record<string, number>>;
   updateGroup(groupId: string, updates: Partial<Group>): Promise<void>;
   joinGroup(joinCode: string, user: MyUser): Promise<Group>;
+  deleteGroup(groupId: string, userId?: string): Promise<void>;
 }
 
 class FirestoreGroupService implements GroupService {
@@ -294,6 +296,52 @@ class FirestoreGroupService implements GroupService {
       console.error('Error joining group:', error);
       throw error;
     }
+  }
+
+  async deleteGroup(groupId: string, userId?: string): Promise<void> {
+    // If userId is provided, verify the user has permission to delete the group
+    if (userId) {
+      // Get the group to check if the user is the creator
+      const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
+
+      if (!groupDoc.exists()) {
+        throw new Error('Group not found');
+      }
+
+      const groupData = groupDoc.data() as Group;
+
+      // Check if the user is the creator of the group
+      if (groupData.createdBy !== userId) {
+        // Check if the user is an admin of the group
+        const memberDocId = `${groupId}_${userId}`;
+        const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+
+        if (!memberDoc.exists() || memberDoc.data().role !== GroupMemberRole.ADMIN) {
+          throw new Error('You do not have permission to delete this group');
+        }
+      }
+    }
+
+    // Use a batch to delete the group and all its members in a single transaction
+    const batch = writeBatch(db);
+
+    // Delete the group document
+    batch.delete(doc(this.groupsCollection, groupId));
+
+    // Delete all members of the group
+    const q = query(this.membersCollection, where('groupId', '==', groupId));
+    const querySnapshot = await getDocs(q);
+
+    // Add all member deletions to the batch
+    querySnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    // Commit the batch
+    await batch.commit();
+
+    // Clear the cache for all users since we don't know who might have this group
+    this.clearUserGroupsCache();
   }
 }
 

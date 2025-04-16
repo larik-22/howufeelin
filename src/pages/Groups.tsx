@@ -14,11 +14,17 @@ import {
   IconButton,
   Tooltip,
   Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import GroupIcon from '@mui/icons-material/Group';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import PeopleIcon from '@mui/icons-material/People';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -43,6 +49,7 @@ export default function Groups() {
   const { hasPermission, getRoleColor, getRoleLabel } = useGroupPermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -53,6 +60,8 @@ export default function Groups() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
 
   // Use useCallback to memoize the fetchGroups function
   const fetchGroups = useCallback(async () => {
@@ -179,114 +188,183 @@ export default function Groups() {
     navigate(`/groups/${groupId}`);
   };
 
-  const renderGroupCard = (group: Group) => (
-    <Card
-      key={group.groupId}
-      sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        cursor: 'pointer',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-        '&:hover': {
-          transform: 'translateY(-4px)',
-          boxShadow: 4,
-        },
-      }}
-      onClick={() => handleNavigateToGroupDetail(group.groupId)}
-    >
-      <CardContent sx={{ flexGrow: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <GroupIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6" component="h3" sx={{ flexGrow: 1 }}>
-            {group.groupName}
-          </Typography>
-          {hasPermission(group, GroupPermission.EDIT_GROUP) && (
-            <Tooltip title="Edit Group">
-              <IconButton
+  const handleOpenDeleteDialog = (group: Group) => {
+    setSelectedGroup(group);
+    setDeletingGroupId(group.groupId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setIsDeleteDialogOpen(false);
+    setSelectedGroup(null);
+    setDeletingGroupId(null);
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!selectedGroup || !auth?.myUser?.userId) return;
+
+    try {
+      setIsDeleting(true);
+      await groupService.deleteGroup(selectedGroup.groupId, auth.myUser.userId);
+
+      // Clear the cache for the current user before fetching
+      if (auth?.myUser?.userId) {
+        groupService.clearUserGroupsCache(auth.myUser.userId);
+      }
+
+      // Refresh the groups list
+      fetchGroups();
+
+      setNotification({
+        message: `Group "${selectedGroup.groupName}" deleted successfully`,
+        type: 'success',
+      });
+
+      handleCloseDeleteDialog();
+    } catch (err) {
+      console.error('Error deleting group:', err);
+      setNotification({
+        message:
+          err instanceof Error ? err.message : 'Failed to delete group. Please try again later.',
+        type: 'error',
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeletingGroupId(null);
+    }
+  };
+
+  const renderGroupCard = (group: Group) => {
+    const isDeletingThisGroup = deletingGroupId === group.groupId;
+
+    return (
+      <Card
+        key={group.groupId}
+        sx={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          cursor: isDeletingThisGroup ? 'not-allowed' : 'pointer',
+          transition: 'transform 0.2s, box-shadow 0.2s',
+          opacity: isDeletingThisGroup ? 0.7 : 1,
+          '&:hover': {
+            transform: isDeletingThisGroup ? 'none' : 'translateY(-4px)',
+            boxShadow: isDeletingThisGroup ? 1 : 4,
+          },
+        }}
+        onClick={() => !isDeletingThisGroup && handleNavigateToGroupDetail(group.groupId)}
+      >
+        <CardContent sx={{ flexGrow: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <GroupIcon sx={{ mr: 1, color: 'primary.main' }} />
+            <Typography variant="h6" component="h3" sx={{ flexGrow: 1 }}>
+              {group.groupName}
+              {isDeletingThisGroup && (
+                <CircularProgress size={16} sx={{ ml: 1, display: 'inline-block' }} />
+              )}
+            </Typography>
+            {hasPermission(group, GroupPermission.EDIT_GROUP) && !isDeletingThisGroup && (
+              <Tooltip title="Edit Group">
+                <IconButton
+                  size="small"
+                  onClick={e => {
+                    e.stopPropagation(); // Prevent card click when clicking edit button
+                    handleOpenEditDialog(group);
+                  }}
+                  sx={{ ml: 1 }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {hasPermission(group, GroupPermission.DELETE_GROUP) && !isDeletingThisGroup && (
+              <Tooltip title="Delete Group">
+                <IconButton
+                  size="small"
+                  onClick={e => {
+                    e.stopPropagation(); // Prevent card click when clicking delete button
+                    handleOpenDeleteDialog(group);
+                  }}
+                  sx={{ ml: 1 }}
+                  color="error"
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {truncateDescription(group.groupDescription, group.groupId)}
+            </Typography>
+            {group.groupDescription.length > DESCRIPTION_MAX_LENGTH && (
+              <Button
                 size="small"
                 onClick={e => {
-                  e.stopPropagation(); // Prevent card click when clicking edit button
-                  handleOpenEditDialog(group);
+                  e.stopPropagation(); // Prevent card click when clicking show more/less
+                  toggleDescription(group.groupId);
                 }}
-                sx={{ ml: 1 }}
+                sx={{ mt: 0.5, p: 0, minWidth: 'auto' }}
+                endIcon={
+                  expandedDescriptions[group.groupId] ? <ExpandLessIcon /> : <ExpandMoreIcon />
+                }
               >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-        </Box>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            {truncateDescription(group.groupDescription, group.groupId)}
-          </Typography>
-          {group.groupDescription.length > DESCRIPTION_MAX_LENGTH && (
+                {expandedDescriptions[group.groupId] ? 'Show less' : 'Show more'}
+              </Button>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <PeopleIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
+            <Typography variant="body2" color="text.secondary">
+              {memberCounts[group.groupId] || 0}{' '}
+              {memberCounts[group.groupId] === 1 ? 'member' : 'members'}
+            </Typography>
+            <Chip
+              size="small"
+              label={getRoleLabel(group.userRole)}
+              sx={{ ml: 1 }}
+              color={getRoleColor(group.userRole)}
+            />
+          </Box>
+          <Chip
+            label={`Join Code: ${group.joinCode}`}
+            size="small"
+            variant="outlined"
+            sx={{ mt: 1 }}
+            onClick={e => {
+              e.stopPropagation(); // Prevent card click when clicking join code
+              handleCopyJoinCode(group.joinCode);
+            }}
+            icon={<ContentCopyIcon />}
+            color={copiedCode === group.joinCode ? 'success' : 'default'}
+          />
+        </CardContent>
+        <CardActions>
+          {hasPermission(group, GroupPermission.MANAGE_MEMBERS) && !isDeletingThisGroup ? (
             <Button
               size="small"
+              color="primary"
               onClick={e => {
-                e.stopPropagation(); // Prevent card click when clicking show more/less
-                toggleDescription(group.groupId);
+                e.stopPropagation(); // Prevent card click when clicking manage members
+                // This will be implemented in the future
               }}
-              sx={{ mt: 0.5, p: 0, minWidth: 'auto' }}
-              endIcon={
-                expandedDescriptions[group.groupId] ? <ExpandLessIcon /> : <ExpandMoreIcon />
-              }
             >
-              {expandedDescriptions[group.groupId] ? 'Show less' : 'Show more'}
+              Manage Members
+            </Button>
+          ) : (
+            <Button
+              size="small"
+              color="primary"
+              disabled
+              onClick={e => e.stopPropagation()} // Prevent card click when clicking disabled button
+            >
+              {isDeletingThisGroup ? 'Deleting...' : 'View Members'}
             </Button>
           )}
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <PeopleIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-          <Typography variant="body2" color="text.secondary">
-            {memberCounts[group.groupId] || 0}{' '}
-            {memberCounts[group.groupId] === 1 ? 'member' : 'members'}
-          </Typography>
-          <Chip
-            size="small"
-            label={getRoleLabel(group.userRole)}
-            sx={{ ml: 1 }}
-            color={getRoleColor(group.userRole)}
-          />
-        </Box>
-        <Chip
-          label={`Join Code: ${group.joinCode}`}
-          size="small"
-          variant="outlined"
-          sx={{ mt: 1 }}
-          onClick={e => {
-            e.stopPropagation(); // Prevent card click when clicking join code
-            handleCopyJoinCode(group.joinCode);
-          }}
-          icon={<ContentCopyIcon />}
-          color={copiedCode === group.joinCode ? 'success' : 'default'}
-        />
-      </CardContent>
-      <CardActions>
-        {hasPermission(group, GroupPermission.MANAGE_MEMBERS) ? (
-          <Button
-            size="small"
-            color="primary"
-            onClick={e => {
-              e.stopPropagation(); // Prevent card click when clicking manage members
-              // This will be implemented in the future
-            }}
-          >
-            Manage Members
-          </Button>
-        ) : (
-          <Button
-            size="small"
-            color="primary"
-            disabled
-            onClick={e => e.stopPropagation()} // Prevent card click when clicking disabled button
-          >
-            View Members
-          </Button>
-        )}
-      </CardActions>
-    </Card>
-  );
+        </CardActions>
+      </Card>
+    );
+  };
 
   if (!auth || !auth.firebaseUser || !auth.myUser) return null;
 
@@ -379,6 +457,39 @@ export default function Groups() {
         onSuccess={handleJoinSuccess}
         user={auth.myUser}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={isDeleteDialogOpen}
+        onClose={isDeleting ? undefined : handleCloseDeleteDialog}
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-description"
+      >
+        <DialogTitle id="delete-dialog-title" sx={{ display: 'flex', alignItems: 'center' }}>
+          {isDeleting && <CircularProgress size={20} sx={{ mr: 1 }} />}
+          Delete Group
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-dialog-description">
+            Are you sure you want to delete the group "{selectedGroup?.groupName}"? This action
+            cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog} disabled={isDeleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteGroup}
+            color="error"
+            disabled={isDeleting}
+            autoFocus
+            startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={!!notification}

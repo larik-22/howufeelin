@@ -12,6 +12,8 @@ export const useGroupPermissions = () => {
         return [GroupMemberRole.ADMIN, GroupMemberRole.MODERATOR].includes(group.userRole);
       case GroupPermission.VIEW_MEMBERS:
         return true; // All members can view
+      case GroupPermission.DELETE_GROUP:
+        return group.userRole === GroupMemberRole.ADMIN; // Only admins can delete groups
       default:
         return false;
     }
@@ -52,4 +54,5 @@ export enum GroupPermission {
   EDIT_GROUP = 'EDIT_GROUP',
   MANAGE_MEMBERS = 'MANAGE_MEMBERS',
   VIEW_MEMBERS = 'VIEW_MEMBERS',
+  DELETE_GROUP = 'DELETE_GROUP',
 }
