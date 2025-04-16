@@ -129,7 +129,7 @@ export default function Navbar() {
           <Typography>You will need to sign in again to access your account.</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDialogClose} color="primary">
+          <Button onClick={handleDialogClose} color="primary" variant="outlined">
             Cancel
           </Button>
           <Button onClick={handleSignOut} color="error" variant="contained">
