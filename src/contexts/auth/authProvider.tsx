@@ -10,37 +10,27 @@ import {
   EmailAuthProvider,
   linkWithCredential,
 } from 'firebase/auth';
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  setDoc,
-  doc,
-  Timestamp,
-  getDoc,
-} from 'firebase/firestore';
-import { auth, db } from '@/firebase.ts';
+import { Timestamp } from 'firebase/firestore';
+import { auth } from '@/firebase';
 import AuthContext from './authContext';
 import { AuthContextType } from '@/types/Auth';
 import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
+import { databaseService } from '@/services/database';
 
 type AuthOperation<T> = () => Promise<T>;
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthContextType['firebaseUser']>(null);
   const [myUser, setMyUser] = useState<MyUser | null>(null);
-  const [loading, setLoading] = useState(true); // Initial auth state loading
-  const [operationLoading, setOperationLoading] = useState(false); // Loading for auth operations
+  const [loading, setLoading] = useState(true);
+  const [operationLoading, setOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Only fetch user data when explicitly needed
   const fetchUserData = async (userId: string) => {
-    const userDocRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userDocRef);
-    if (userDoc.exists()) {
-      setMyUser(userDoc.data() as MyUser);
+    const userData = await databaseService.getUserById(userId);
+    if (userData) {
+      setMyUser(userData);
     }
   };
 
@@ -48,15 +38,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const unsubscribe = onAuthStateChanged(auth, async user => {
       setUser(user);
       if (user) {
-        // Only fetch user data if we don't have it
         if (!myUser) {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            setMyUser(userDoc.data() as MyUser);
-          }
-
-          console.log('fetching user data', myUser);
+          await fetchUserData(user.uid);
         }
       } else {
         setMyUser(null);
@@ -75,7 +58,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     } catch (err) {
       const authError = createAuthError(err);
       setError(authError.message);
-      throw err; // Re-throw to allow component to handle the error
+      throw err;
     } finally {
       setOperationLoading(false);
     }
@@ -99,14 +82,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const createUserDocument = async (firebaseUser: FirebaseUser, username?: string) => {
-    const userDocRef = doc(db, 'users', firebaseUser.uid);
-    const userDoc = await getDoc(userDocRef);
+    const existingUser = await databaseService.getUserById(firebaseUser.uid);
 
-    // Only create document if it doesn't exist
-    if (!userDoc.exists()) {
+    if (!existingUser) {
       const newUser: MyUser = {
         userId: firebaseUser.uid,
-        username: username || '', // Don't set a default username
+        username: username || '',
         email: firebaseUser.email || '',
         displayName:
           username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
@@ -114,10 +95,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         updatedAt: Timestamp.now(),
       };
 
-      await setDoc(userDocRef, newUser);
+      await databaseService.createUser(newUser);
       return newUser;
     }
-    return userDoc.data() as MyUser;
+    return existingUser;
   };
 
   const linkEmailPassword = async (password: string) => {
@@ -154,35 +135,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
 
     await handleAuthOperation(async () => {
-      // Check if username is already taken
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        // Check if the found document belongs to the current user
-        const existingUser = querySnapshot.docs[0];
-        if (existingUser.id !== auth.currentUser!.uid) {
-          throw new AuthError('Username is already taken', 'username/taken');
-        }
+      const isTaken = await databaseService.isUsernameTaken(username, auth.currentUser!.uid);
+      if (isTaken) {
+        throw new AuthError('Username is already taken', 'username/taken');
       }
 
-      // Update Firestore user document
-      const userDocRef = doc(db, 'users', auth.currentUser!.uid);
-      await setDoc(
-        userDocRef,
-        {
-          username,
-          displayName: username,
-          updatedAt: Timestamp.now(),
-        },
-        { merge: true }
-      );
+      await databaseService.updateUser(auth.currentUser!.uid, {
+        username,
+        displayName: username,
+      });
 
-      // Fetch the updated document to ensure we have the latest data
-      const updatedDoc = await getDoc(userDocRef);
-      if (updatedDoc.exists()) {
-        setMyUser(updatedDoc.data() as MyUser);
+      const updatedUser = await databaseService.getUserById(auth.currentUser!.uid);
+      if (updatedUser) {
+        setMyUser(updatedUser);
       }
     });
   };
