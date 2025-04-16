@@ -72,18 +72,21 @@ export const GroupDetails = ({
             </Box>
           ) : (
             <AvatarGroup max={4} sx={{ ml: 2 }}>
-              {groupMembers.map((member: GroupMember, index: number) => (
-                <Avatar
-                  key={index}
-                  alt={member.displayName}
-                  src={
-                    member.photoURL ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      member.displayName
-                    )}&background=random`
-                  }
-                />
-              ))}
+              {groupMembers.map((member: GroupMember, index: number) => {
+                // Get the user's initial for the fallback avatar
+                const userInitial = member.displayName?.[0]?.toUpperCase() || 'U';
+
+                return (
+                  <Avatar
+                    key={index}
+                    alt={member.displayName}
+                    src={member.photoURL}
+                    sx={{ bgcolor: 'primary.main' }}
+                  >
+                    {userInitial}
+                  </Avatar>
+                );
+              })}
             </AvatarGroup>
           )}
         </Box>

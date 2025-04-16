@@ -10,15 +10,13 @@ import {
   Skeleton,
 } from '@mui/material';
 import { GroupMemberRole } from '@/services/groupService';
-import { useState, useEffect } from 'react';
-import PersonIcon from '@mui/icons-material/Person';
 
 interface Member {
   name: string;
   role: GroupMemberRole;
   avatar: string;
   userId: string;
-  photoURL?: string;
+  photoURL?: string | null;
 }
 
 interface GroupMembersProps {
@@ -34,45 +32,6 @@ export const GroupMembers = ({
   getRoleColor,
   loading = false,
 }: GroupMembersProps) => {
-  const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
-  const [loadingPhotos, setLoadingPhotos] = useState<boolean>(true);
-
-  useEffect(() => {
-    const fetchUserPhotos = async () => {
-      if (members.length === 0) {
-        setLoadingPhotos(false);
-        return;
-      }
-
-      try {
-        const photoMap: Record<string, string> = {};
-
-        // Fetch photos for each member
-        for (const member of members) {
-          // Use photoURL if available, otherwise use the avatar or fallback to UI Avatars
-          if (member.photoURL) {
-            photoMap[member.userId] = member.photoURL;
-          } else if (member.avatar) {
-            photoMap[member.userId] = member.avatar;
-          } else {
-            // Fallback to UI Avatars
-            photoMap[member.userId] = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              member.name
-            )}&background=random`;
-          }
-        }
-
-        setUserPhotos(photoMap);
-      } catch (error) {
-        console.error('Error fetching user photos:', error);
-      } finally {
-        setLoadingPhotos(false);
-      }
-    };
-
-    fetchUserPhotos();
-  }, [members]);
-
   if (loading) {
     return (
       <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
@@ -112,41 +71,41 @@ export const GroupMembers = ({
         </Typography>
         <Divider sx={{ mb: 2 }} />
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {members.map((member, index) => (
-            <Paper
-              key={index}
-              variant="outlined"
-              sx={{
-                p: 2,
-                display: 'flex',
-                alignItems: 'center',
-                borderRadius: 2,
-              }}
-            >
-              {loadingPhotos ? (
-                <Skeleton variant="circular" width={50} height={50} sx={{ mr: 2 }} />
-              ) : (
+          {members.map((member, index) => {
+            const userInitial = member.name?.[0]?.toUpperCase() || 'U';
+
+            return (
+              <Paper
+                key={index}
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: 2,
+                }}
+              >
                 <Avatar
-                  src={userPhotos[member.userId]}
+                  src={member.photoURL || undefined}
                   alt={member.name}
-                  sx={{ width: 50, height: 50, mr: 2 }}
+                  sx={{ width: 50, height: 50, mr: 2, bgcolor: 'primary.main' }}
                 >
-                  <PersonIcon />
+                  {userInitial}
                 </Avatar>
-              )}
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                  {member.name}
-                </Typography>
-                <Chip
-                  label={getRoleLabel(member.role)}
-                  size="small"
-                  color={getRoleColor(member.role)}
-                  sx={{ mt: 0.5 }}
-                />
-              </Box>
-            </Paper>
-          ))}
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                    {member.name}
+                  </Typography>
+                  <Chip
+                    label={getRoleLabel(member.role)}
+                    size="small"
+                    color={getRoleColor(member.role)}
+                    sx={{ mt: 0.5 }}
+                  />
+                </Box>
+              </Paper>
+            );
+          })}
         </Box>
       </CardContent>
     </Card>

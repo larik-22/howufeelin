@@ -302,7 +302,7 @@ export default function GroupDetail() {
                 avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
                   member.displayName
                 )}&background=random`,
-                photoURL: member.photoURL,
+                photoURL: member.photoURL || null,
               }))}
               getRoleLabel={getRoleLabel}
               getRoleColor={getRoleColor}
