@@ -20,7 +20,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build
-        run: npm run build
+        run: |
+          # Create a temporary tsconfig.json that extends the paths config
+          cp tsconfig.app.json tsconfig.temp.json
+          sed -i 's/"include": \["src"\]/"include": \["src"\], "extends": "tsconfig.paths.json"/' tsconfig.temp.json
+          mv tsconfig.temp.json tsconfig.app.json
+          npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
