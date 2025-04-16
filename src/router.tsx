@@ -47,7 +47,7 @@ async function groupLoader({ params }: LoaderFunctionArgs) {
 
   try {
     // First check if the group exists
-    const group = await groupService.getGroupById(groupId);
+    const group = await groupService.getGroupById(groupId, currentUser.uid);
 
     if (!group) {
       // Group not found, redirect to 404

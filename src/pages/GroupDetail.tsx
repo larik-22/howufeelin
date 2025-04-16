@@ -55,10 +55,17 @@ export default function GroupDetail() {
 
   // Get the group data from the loader
   const loaderData = useLoaderData() as LoaderData;
-  const { group: loaderGroup, memberCount: loaderMemberCount, members: loaderMembers } = loaderData;
+  const {
+    group: loaderGroup,
+    memberCount: loaderMemberCount,
+    members: loaderMembers,
+    userRole: loaderUserRole,
+  } = loaderData;
 
   // Initialize state with loader data
-  const [group] = useState<Group | null>(loaderGroup || null);
+  const [group] = useState<Group | null>(
+    loaderGroup ? { ...loaderGroup, userRole: loaderUserRole } : null
+  );
   const [memberCount] = useState<number>(loaderMemberCount || 0);
   const [groupMembers] = useState<GroupMember[]>(loaderMembers || []);
   const [loading, setLoading] = useState<boolean>(false);

@@ -12,9 +12,13 @@ interface GroupHeaderProps {
 }
 
 export const GroupHeader = ({ group, onBack, onLeave, currentUserId }: GroupHeaderProps) => {
-  // Only show leave button if user is not the creator of the group
+  // Only show leave button if user is not an admin
   const canLeaveGroup =
     group.userRole !== GroupMemberRole.ADMIN || group.createdBy !== currentUserId;
+
+  console.log('currentUserId', currentUserId);
+  console.log('group.createdBy', group.createdBy);
+  console.log('group.userRole', group.userRole);
 
   return (
     <Box

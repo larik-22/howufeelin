@@ -6,8 +6,8 @@ import {
   Chip,
   useTheme,
   Tooltip,
-  CircularProgress,
   Paper,
+  Skeleton,
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -113,6 +113,16 @@ export const MoodCalendar = ({
         title={hasRatings ? `Average rating: ${avgRating}` : 'No ratings'}
         arrow
         placement="top"
+        PopperProps={{
+          modifiers: [
+            {
+              name: 'offset',
+              options: {
+                offset: [0, -8],
+              },
+            },
+          ],
+        }}
       >
         <Box
           sx={{
@@ -163,6 +173,40 @@ export const MoodCalendar = ({
 
   // Memoize chart data to avoid recalculating on every render
   const chartData = useMemo(() => getChartData(), [selectedDate, ratingsByDate]);
+
+  // Render loading skeleton for the calendar
+  const renderCalendarSkeleton = () => (
+    <Box sx={{ p: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <Skeleton variant="text" width={100} height={30} />
+        <Skeleton variant="text" width={100} height={30} />
+      </Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton key={i} variant="text" width={40} height={30} />
+        ))}
+      </Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        {Array.from({ length: 35 }).map((_, i) => (
+          <Skeleton
+            key={i}
+            variant="rectangular"
+            width={36}
+            height={36}
+            sx={{ borderRadius: '50%' }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
+
+  // Render loading skeleton for the chart
+  const renderChartSkeleton = () => (
+    <Box sx={{ p: 2 }}>
+      <Skeleton variant="text" width={200} height={30} sx={{ mb: 2 }} />
+      <Skeleton variant="rectangular" width="100%" height={300} sx={{ borderRadius: 1 }} />
+    </Box>
+  );
 
   return (
     <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
@@ -250,60 +294,45 @@ export const MoodCalendar = ({
               position: 'relative',
             }}
           >
-            {isLoading && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                  zIndex: 1,
-                  borderRadius: 1,
-                }}
-              >
-                <CircularProgress size={40} />
-              </Box>
-            )}
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  flex: 1,
-                  p: 2,
-                }}
-              >
-                <DateCalendar
-                  value={selectedDate}
-                  onChange={onDateChange}
-                  slots={{
-                    day: CustomPickersDay,
-                  }}
+            {isLoading ? (
+              renderCalendarSkeleton()
+            ) : (
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <Box
                   sx={{
-                    width: '100%',
-                    height: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
                     flex: 1,
-                    '& .MuiPickersDay-root': {
-                      width: 36,
-                      height: 36,
-                      margin: '0 2px',
-                    },
-                    '& .MuiPickersDay-root.Mui-selected': {
-                      backgroundColor: theme.palette.primary.main,
-                      '&:hover': {
-                        backgroundColor: theme.palette.primary.dark,
-                      },
-                    },
+                    p: 2,
                   }}
-                />
-              </Box>
-            </LocalizationProvider>
+                >
+                  <DateCalendar
+                    value={selectedDate}
+                    onChange={onDateChange}
+                    slots={{
+                      day: CustomPickersDay,
+                    }}
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      flex: 1,
+                      '& .MuiPickersDay-root': {
+                        width: 36,
+                        height: 36,
+                        margin: '0 2px',
+                      },
+                      '& .MuiPickersDay-root.Mui-selected': {
+                        backgroundColor: theme.palette.primary.main,
+                        '&:hover': {
+                          backgroundColor: theme.palette.primary.dark,
+                        },
+                      },
+                    }}
+                  />
+                </Box>
+              </LocalizationProvider>
+            )}
           </Box>
           <Box
             sx={{
@@ -316,62 +345,55 @@ export const MoodCalendar = ({
               position: 'relative',
             }}
           >
-            {isLoading && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                  zIndex: 1,
-                  borderRadius: 1,
-                }}
-              >
-                <CircularProgress size={40} />
-              </Box>
-            )}
-            <Typography variant="subtitle1" sx={{ mb: 2 }}>
-              Ratings for {selectedDate.format('MMMM D, YYYY')}
-            </Typography>
-            <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
-              {getRatingsForDate(selectedDate.format('YYYY-MM-DD')).length > 0 ? (
-                <BarChart
-                  height={300}
-                  series={chartData.series}
-                  xAxis={chartData.xAxis}
-                  margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
-                  colors={[theme.palette.primary.main]}
-                  borderRadius={4}
-                  tooltip={{ trigger: 'item' }}
-                  axisHighlight={{
-                    x: 'band',
-                    y: 'line',
-                  }}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'background.paper',
-                    borderRadius: 2,
-                    p: 2,
-                    border: `1px dashed ${theme.palette.divider}`,
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    No ratings for this date
-                  </Typography>
+            {isLoading ? (
+              renderChartSkeleton()
+            ) : (
+              <>
+                <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                  Ratings for {selectedDate.format('MMMM D, YYYY')}
+                </Typography>
+                <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
+                  {getRatingsForDate(selectedDate.format('YYYY-MM-DD')).length > 0 ? (
+                    <BarChart
+                      height={300}
+                      series={chartData.series}
+                      xAxis={chartData.xAxis}
+                      margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
+                      colors={[
+                        theme.palette.error.main,
+                        theme.palette.warning.main,
+                        theme.palette.success.main,
+                        theme.palette.info.main,
+                        theme.palette.secondary.main,
+                      ]}
+                      borderRadius={4}
+                      tooltip={{ trigger: 'item' }}
+                      axisHighlight={{
+                        x: 'band',
+                        y: 'line',
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        bgcolor: 'background.paper',
+                        borderRadius: 2,
+                        p: 2,
+                        border: `1px dashed ${theme.palette.divider}`,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        No ratings for this date
+                      </Typography>
+                    </Box>
+                  )}
                 </Box>
-              )}
-            </Box>
+              </>
+            )}
           </Box>
         </Box>
       </CardContent>

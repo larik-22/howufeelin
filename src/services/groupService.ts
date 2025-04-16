@@ -27,7 +27,7 @@ interface GroupService {
   isJoinCodeUnique(joinCode: string): Promise<boolean>;
   generateUniqueJoinCode(): Promise<string>;
   getUserGroups(userId: string): Promise<Group[]>;
-  getGroupById(groupId: string): Promise<Group | null>;
+  getGroupById(groupId: string, userId?: string): Promise<Group | null>;
   addMemberToGroup(groupId: string, user: MyUser, role?: GroupMemberRole): Promise<void>;
   removeMemberFromGroup(groupId: string, userId: string): Promise<void>;
   updateMemberRole(groupId: string, userId: string, role: GroupMemberRole): Promise<void>;
@@ -89,7 +89,11 @@ class FirestoreGroupService implements GroupService {
     // Clear the cache for the user who created the group
     this.clearUserGroupsCache(user.userId);
 
-    return group;
+    // Return the group with the user role
+    return {
+      ...group,
+      userRole: GroupMemberRole.ADMIN,
+    };
   }
 
   async isJoinCodeUnique(joinCode: string): Promise<boolean> {
@@ -166,9 +170,35 @@ class FirestoreGroupService implements GroupService {
     return groups;
   }
 
-  async getGroupById(groupId: string): Promise<Group | null> {
+  async getGroupById(groupId: string, userId?: string): Promise<Group | null> {
     const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
-    return groupDoc.exists() ? (groupDoc.data() as Group) : null;
+
+    if (!groupDoc.exists()) {
+      return null;
+    }
+
+    const group = groupDoc.data() as Group;
+
+    // If userId is provided, get the user's role in this group
+    if (userId) {
+      try {
+        const memberDocId = `${groupId}_${userId}`;
+        const memberRef = doc(db, 'groupMembers', memberDocId);
+        const memberDoc = await getDoc(memberRef);
+
+        if (memberDoc.exists()) {
+          const memberData = memberDoc.data() as GroupMember;
+          return {
+            ...group,
+            userRole: memberData.role,
+          };
+        }
+      } catch (error) {
+        console.error('Error getting user role for group:', error);
+      }
+    }
+
+    return group;
   }
 
   async addMemberToGroup(
@@ -314,7 +344,11 @@ class FirestoreGroupService implements GroupService {
       // Clear the cache for this user to ensure fresh data
       this.clearUserGroupsCache(user.userId);
 
-      return groupData;
+      // Return the group with the user role
+      return {
+        ...groupData,
+        userRole: GroupMemberRole.MEMBER,
+      };
     } catch (error) {
       console.error('Error joining group:', error);
       throw error;
