@@ -5,8 +5,10 @@ import dayjs from 'dayjs';
 
 import AuthContext from '@/contexts/auth/authContext';
 import { groupService } from '@/services/groupService';
+import { ratingService, RatingError } from '@/services/ratingService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
+import { Rating } from '@/types/Rating';
 import { useGroupPermissions } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -15,35 +17,12 @@ import { GroupDetails } from '@/components/group/GroupDetails';
 import { MoodInput } from '@/components/mood/MoodInput';
 import { MoodCalendar } from '@/components/mood/MoodCalendar';
 import { GroupMembers } from '@/components/group/GroupMembers';
+import { RatingList } from '@/components/mood/RatingList';
 
 interface Notification {
   message: string;
   type: 'success' | 'error' | 'info';
 }
-
-// Mock data for user ratings - this would come from your backend
-const mockUserRatings = [
-  // April 14, 2025
-  { userId: 'user1', username: 'John', rating: 8, date: '2025-04-14' },
-  { userId: 'user2', username: 'Jane', rating: 6, date: '2025-04-14' },
-  { userId: 'user3', username: 'Bob', rating: 9, date: '2025-04-14' },
-  { userId: 'user4', username: 'Alice', rating: 7, date: '2025-04-14' },
-  { userId: 'user5', username: 'Charlie', rating: 5, date: '2025-04-14' },
-
-  // April 15, 2025
-  { userId: 'user1', username: 'John', rating: 7, date: '2025-04-15' },
-  { userId: 'user2', username: 'Jane', rating: 8, date: '2025-04-15' },
-  { userId: 'user3', username: 'Bob', rating: 5, date: '2025-04-15' },
-  { userId: 'user4', username: 'Alice', rating: 9, date: '2025-04-15' },
-  { userId: 'user5', username: 'Charlie', rating: 6, date: '2025-04-15' },
-
-  // April 16, 2025 (today)
-  { userId: 'user1', username: 'John', rating: 9, date: '2025-04-16' },
-  { userId: 'user2', username: 'Jane', rating: 7, date: '2025-04-16' },
-  { userId: 'user3', username: 'Bob', rating: 8, date: '2025-04-16' },
-  { userId: 'user4', username: 'Alice', rating: 6, date: '2025-04-16' },
-  // Charlie hasn't submitted a rating for today yet
-];
 
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -60,52 +39,41 @@ export default function GroupDetail() {
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
-  const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs('2025-04-16'));
+  const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs>(dayjs());
   const [activeTab, setActiveTab] = useState<number>(0);
   const [hasRatedToday, setHasRatedToday] = useState<boolean>(false);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [todayRatings, setTodayRatings] = useState<Rating[]>([]);
+  const [calendarRatings, setCalendarRatings] = useState<Rating[]>([]);
 
   useEffect(() => {
     const fetchGroupData = async () => {
       if (!groupId || !auth?.myUser?.userId) return;
+      if (!auth.myUser) return;
 
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch member count and group members in a single batch
-        const [count, members] = await Promise.all([
-          groupService.getGroupMemberCount(groupId),
-          groupService.getGroupMembers(groupId),
+        // Fetch all data in parallel using Promise.all
+        const [groupData, ratingData] = await Promise.all([
+          groupService.getGroupDetailData(groupId, auth.myUser.userId),
+          ratingService.getGroupDetailRatings(groupId, auth.myUser.userId),
         ]);
 
-        // Fetch user's role in this group
-        const userGroups = await groupService.getUserGroups(auth.myUser.userId);
-        const userGroup = userGroups.find(g => g.groupId === groupId);
-
-        if (!userGroup) {
-          setError('You are not a member of this group');
-          setLoading(false);
-          return;
-        }
-
-        // Set group data with user role
+        // Update all state at once to minimize re-renders
         setGroup({
-          ...loaderGroup,
-          userRole: userGroup.userRole,
+          ...groupData.group,
+          userRole: groupData.userRole,
         });
-        setMemberCount(count);
-        setGroupMembers(members);
-
-        // Check if user has already rated today
-        const today = dayjs().format('YYYY-MM-DD');
-        const userRating = mockUserRatings.find(
-          rating => rating.userId === auth.myUser?.userId && rating.date === today
-        );
-        setHasRatedToday(!!userRating);
+        setMemberCount(groupData.memberCount);
+        setGroupMembers(groupData.members);
+        setHasRatedToday(ratingData.hasRatedToday);
+        setTodayRatings(ratingData.todayRatings);
+        setCalendarRatings(ratingData.calendarRatings);
       } catch (err) {
         console.error('Error fetching group data:', err);
-        setError('Failed to load group data');
+        setError(`Failed to load group data: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setLoading(false);
       }
@@ -138,6 +106,7 @@ export default function GroupDetail() {
     setNotification(null);
   };
 
+  // TODO: Fix this (example logic for now, no timeouts should be used)
   const handleLeaveGroup = async () => {
     if (!groupId || !auth?.myUser?.userId) return;
 
@@ -172,13 +141,54 @@ export default function GroupDetail() {
   };
 
   const handleMoodSubmit = async (rating: number, note: string) => {
-    // This would be implemented to save the mood rating to the backend
-    console.log('Submitting mood:', { rating, note });
-    setHasRatedToday(true);
-    setNotification({
-      message: 'Mood rating submitted successfully!',
-      type: 'success',
-    });
+    if (!groupId || !auth?.myUser?.userId) return;
+
+    try {
+      setLoading(true);
+
+      // Create the rating
+      const newRating = await ratingService.createRating(groupId, auth.myUser.userId, rating, note);
+
+      // Update the UI - add to both today's ratings and calendar ratings
+      setTodayRatings(prev => [newRating, ...prev]);
+      setCalendarRatings(prev => [newRating, ...prev]);
+      setHasRatedToday(true);
+
+      setNotification({
+        message: 'Mood rating submitted successfully!',
+        type: 'success',
+      });
+    } catch (error: unknown) {
+      console.error('Error submitting mood rating:', error);
+
+      let errorMessage = 'Failed to submit mood rating';
+      let errorType: 'error' | 'info' = 'error';
+
+      if (error instanceof RatingError) {
+        switch (error.code) {
+          case 'ALREADY_RATED':
+            errorMessage = 'You have already rated your mood today';
+            errorType = 'info';
+            setHasRatedToday(true);
+            break;
+          case 'INVALID_RATING':
+            errorMessage = 'Please provide a valid rating between 1 and 10';
+            break;
+          case 'INVALID_NOTES':
+            errorMessage = 'Notes must be less than 500 characters';
+            break;
+          default:
+            errorMessage = error.message;
+        }
+      }
+
+      setNotification({
+        message: errorMessage,
+        type: errorType,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {
@@ -274,20 +284,26 @@ export default function GroupDetail() {
 
           {activeTab === 0 && (
             <Box>
-              {!hasRatedToday && (
-                <MoodInput onSubmit={handleMoodSubmit} hasRatedToday={hasRatedToday} />
-              )}
-              <MoodCalendar
-                ratings={mockUserRatings}
-                selectedDate={selectedDate}
-                onDateChange={handleDateChange}
+              <MoodInput onSubmit={handleMoodSubmit} hasRatedToday={hasRatedToday} />
+
+              {/* Display today's ratings using the RatingList component */}
+              <RatingList
+                ratings={todayRatings}
+                groupMembers={groupMembers}
+                title="Today's Moods"
               />
             </Box>
           )}
 
           {activeTab === 1 && (
             <MoodCalendar
-              ratings={mockUserRatings}
+              ratings={calendarRatings.map(rating => ({
+                userId: rating.userId,
+                username:
+                  groupMembers.find(m => m.userId === rating.userId)?.displayName || 'Unknown',
+                rating: rating.ratingNumber,
+                date: rating.ratingDate,
+              }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
             />

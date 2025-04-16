@@ -38,6 +38,15 @@ interface GroupService {
   updateGroup(groupId: string, updates: Partial<Group>): Promise<void>;
   joinGroup(joinCode: string, user: MyUser): Promise<Group>;
   deleteGroup(groupId: string, userId?: string): Promise<void>;
+  getGroupDetailData(
+    groupId: string,
+    userId: string
+  ): Promise<{
+    group: Group;
+    memberCount: number;
+    members: GroupMember[];
+    userRole: GroupMemberRole;
+  }>;
 }
 
 class FirestoreGroupService implements GroupService {
@@ -353,6 +362,56 @@ class FirestoreGroupService implements GroupService {
 
     // Clear the cache for all users since we don't know who might have this group
     this.clearUserGroupsCache();
+  }
+
+  async getGroupDetailData(
+    groupId: string,
+    userId: string
+  ): Promise<{
+    group: Group;
+    memberCount: number;
+    members: GroupMember[];
+    userRole: GroupMemberRole;
+  }> {
+    try {
+      // Get group document
+      const groupRef = doc(db, 'groups', groupId);
+      const groupDoc = await getDoc(groupRef);
+
+      if (!groupDoc.exists()) {
+        throw new Error('Group not found');
+      }
+
+      const group = groupDoc.data() as Group;
+
+      // Get user's role in this group from groupMembers collection
+      const memberDocId = `${groupId}_${userId}`;
+      const memberRef = doc(db, 'groupMembers', memberDocId);
+      const memberDoc = await getDoc(memberRef);
+
+      if (!memberDoc.exists()) {
+        throw new Error('User is not a member of this group');
+      }
+
+      const memberData = memberDoc.data() as GroupMember;
+      const userRole = memberData.role;
+
+      // Get member count and members in parallel
+      const [memberCount, members] = await Promise.all([
+        this.getGroupMemberCount(groupId),
+        this.getGroupMembers(groupId),
+      ]);
+
+      return {
+        group: { ...group, groupId },
+        memberCount,
+        members,
+        userRole,
+      };
+    } catch (error) {
+      console.error('Error getting group detail data:', error);
+      throw error;
+    }
   }
 }
 
