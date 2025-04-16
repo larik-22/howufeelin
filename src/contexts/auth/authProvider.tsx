@@ -6,11 +6,12 @@ import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
   signInWithPopup,
+  User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, db } from '@/firebase.ts';
 import AuthContext from './authContext';
 import { AuthContextType } from '@/types/auth';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { MyUser } from '@/types/MyUser';
 import { getAuthErrorMessage } from '@/utils/authErrors';
 
@@ -18,7 +19,8 @@ type AuthOperation<T> = () => Promise<T>;
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthContextType['user']>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Initial auth state loading
+  const [operationLoading, setOperationLoading] = useState(false); // Loading for auth operations
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,14 +34,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   async function handleAuthOperation<T>(operation: AuthOperation<T>): Promise<T> {
     try {
-      setLoading(true);
+      setOperationLoading(true);
       setError(null);
       return await operation();
     } catch (err) {
       setError(getAuthErrorMessage(err));
       throw err; // Re-throw to allow component to handle the error
     } finally {
-      setLoading(false);
+      setOperationLoading(false);
     }
   }
 
@@ -47,10 +49,33 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     await handleAuthOperation(() => signInWithEmailAndPassword(auth, email, password));
   };
 
+  const createUserDocument = async (firebaseUser: FirebaseUser, username?: string) => {
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
+    const userDoc = await getDoc(userDocRef);
+
+    // Only create document if it doesn't exist
+    if (!userDoc.exists()) {
+      const newUser: MyUser = {
+        userId: firebaseUser.uid,
+        username:
+          username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+        email: firebaseUser.email || '',
+        displayName:
+          username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+
+      await setDoc(userDocRef, newUser);
+    }
+  };
+
   const signInWithGoogle = async () => {
     await handleAuthOperation(async () => {
       const provider = new GoogleAuthProvider();
-      return await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      await createUserDocument(result.user);
+      return result;
     });
   };
 
@@ -67,20 +92,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     await handleAuthOperation(async () => {
       // Create auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const firebaseUser = userCredential.user;
-
-      // Create user document in Firestore
-      const newUser: MyUser = {
-        userId: firebaseUser.uid,
-        username: username,
-        email: email,
-        displayName: username,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      };
-
-      const userDocRef = doc(db, 'users', firebaseUser.uid);
-      await setDoc(userDocRef, newUser);
+      await createUserDocument(userCredential.user, username);
       return userCredential;
     });
   };
@@ -94,6 +106,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const value: AuthContextType = {
     user,
     loading,
+    operationLoading,
     error,
     signInWithEmail,
     signInWithGoogle,

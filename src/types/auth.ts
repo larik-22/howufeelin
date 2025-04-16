@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 export interface AuthState {
   user: User | null;
   loading: boolean;
+  operationLoading: boolean;
   error: string | null;
 }
 

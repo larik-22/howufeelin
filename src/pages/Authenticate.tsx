@@ -41,10 +41,15 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isRegister) {
-      await auth.signUp(email, password, name);
-    } else {
-      await auth.signInWithEmail(email, password);
+    try {
+      if (isRegister) {
+        await auth.signUp(email, password, name);
+      } else {
+        await auth.signInWithEmail(email, password);
+      }
+    } catch (error) {
+      // Error is already handled by the auth provider
+      console.error('Auth operation failed:', error);
     }
   };
 
@@ -98,6 +103,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                   fullWidth
                   variant="outlined"
                   autoComplete="name"
+                  disabled={auth.operationLoading}
                 />
               )}
               <TextField
@@ -109,6 +115,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                 fullWidth
                 variant="outlined"
                 autoComplete="email"
+                disabled={auth.operationLoading}
               />
               <TextField
                 label="Password"
@@ -119,6 +126,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                 fullWidth
                 variant="outlined"
                 autoComplete="current-password"
+                disabled={auth.operationLoading}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -126,6 +134,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                         onClick={() => setShowPassword(!showPassword)}
                         edge="end"
                         tabIndex={-1}
+                        disabled={auth.operationLoading}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -137,7 +146,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                 type="submit"
                 variant="outlined"
                 size="large"
-                disabled={auth.loading}
+                disabled={auth.operationLoading}
                 sx={{
                   mt: 2,
                   fontWeight: 'bold',
@@ -145,7 +154,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                   color: 'primary.main',
                 }}
               >
-                {auth.loading ? (
+                {auth.operationLoading ? (
                   <CircularProgress size={24} color="inherit" />
                 ) : isRegister ? (
                   'Sign Up'
@@ -163,7 +172,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
             size="large"
             startIcon={<GoogleIcon sx={{ color: 'white' }} />}
             onClick={auth.signInWithGoogle}
-            disabled={auth.loading}
+            disabled={auth.operationLoading}
             sx={{
               color: 'white',
               fontWeight: 'bold',
@@ -180,6 +189,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
                 variant="body2"
                 onClick={handleToggleMode}
                 sx={{ fontWeight: 'bold' }}
+                disabled={auth.operationLoading}
               >
                 {isRegister ? 'Sign In' : 'Sign Up'}
               </Link>
