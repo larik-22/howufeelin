@@ -100,23 +100,29 @@ export default function Groups() {
     if (!auth?.myUser?.userId) return;
 
     setLoading(true); // Set loading when starting subscription
+    const memberCountSubscriptions: (() => void)[] = [];
 
     // Subscribe to user groups updates
     const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
       setGroups(updatedGroups);
       setLoading(false); // Clear loading when groups are received
 
-      // Set up subscriptions for each group's members
-      const memberCountSubscriptions = updatedGroups.map(group => {
-        return groupService.subscribeToGroupMembers(group.groupId, members => {
+      // Clean up previous member count subscriptions
+      memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
+      memberCountSubscriptions.length = 0;
+
+      // Set up new subscriptions for each group's members
+      updatedGroups.forEach(group => {
+        const unsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
           setMemberCounts(prevCounts => ({
             ...prevCounts,
             [group.groupId]: members.length,
           }));
         });
+        memberCountSubscriptions.push(unsubscribe);
       });
 
-      // Clean up subscriptions for groups that are no longer in the list
+      // Clean up member counts for groups that are no longer in the list
       setMemberCounts(prevCounts => {
         const newCounts = { ...prevCounts };
         Object.keys(newCounts).forEach(groupId => {
@@ -126,16 +132,12 @@ export default function Groups() {
         });
         return newCounts;
       });
-
-      // Clean up subscriptions when component unmounts or groups change
-      return () => {
-        memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
-      };
     });
 
-    // Clean up subscription when component unmounts
+    // Clean up all subscriptions when component unmounts
     return () => {
       unsubscribe();
+      memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
       setLoading(false); // Ensure loading is cleared on unmount
     };
   }, [auth?.myUser?.userId]);
