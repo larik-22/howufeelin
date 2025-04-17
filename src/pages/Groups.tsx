@@ -27,10 +27,12 @@ import JoinGroupDialog from '@/components/JoinGroupDialog';
 import GroupMembersDialog from '@/components/GroupMembersDialog';
 import GroupFilters from '@/components/GroupFilters';
 import GroupCard from '@/components/GroupCard';
+import LeaveGroupDialog from '@/components/LeaveGroupDialog';
 import { groupService, GroupMemberRole } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { useGroupPermissions } from '@/hooks/useGroupPermissions';
 import { useGroupFilters, SortOption } from '@/hooks/useGroupFilters';
+import { useLeaveGroup } from '@/hooks/useLeaveGroup';
 import { copyToClipboard } from '@/utils/clipboard';
 
 interface Notification {
@@ -77,6 +79,30 @@ export default function Groups() {
     toggleFilters,
     clearFilters,
   } = useGroupFilters({ groups, memberCounts });
+
+  // Use our custom hook for leave group functionality
+  const {
+    leaveGroupModalOpen,
+    handleLeaveGroupClick,
+    handleCloseLeaveGroupModal,
+    selectedGroup: groupToLeave,
+  } = useLeaveGroup(
+    auth?.myUser?.userId,
+    () => {
+      // Success callback - the real-time subscription will handle updating the groups list
+      setNotification({
+        message: 'You have left the group',
+        type: 'success',
+      });
+    },
+    message => {
+      // Error callback
+      setNotification({
+        message,
+        type: 'error',
+      });
+    }
+  );
 
   // Set up real-time subscription for user groups
   useEffect(() => {
@@ -453,6 +479,7 @@ export default function Groups() {
               onCopyJoinCode={handleCopyJoinCode}
               onToggleDescription={toggleDescription}
               onManageMembers={handleOpenMembersDialog}
+              onLeaveGroup={handleLeaveGroupClick}
             />
           ))}
         </Box>
@@ -480,6 +507,25 @@ export default function Groups() {
           onClose={handleCloseMembersDialog}
           group={selectedGroupForMembers}
           user={auth.myUser}
+        />
+      )}
+
+      {/* Leave Group Dialog */}
+      {groupToLeave && auth?.myUser && (
+        <LeaveGroupDialog
+          open={leaveGroupModalOpen}
+          onClose={handleCloseLeaveGroupModal}
+          group={groupToLeave}
+          userId={auth.myUser.userId}
+          onSuccess={() => {
+            // The real-time subscription will handle updating the groups list
+          }}
+          onError={message => {
+            setNotification({
+              message,
+              type: 'error',
+            });
+          }}
         />
       )}
 
