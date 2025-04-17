@@ -278,6 +278,8 @@ export default function GroupMembersDialog({
                           />
                         </Box>
                       }
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondaryTypographyProps={{ component: 'div' }}
                     />
                     {canManageMember(member) && (
                       <ListItemSecondaryAction>
