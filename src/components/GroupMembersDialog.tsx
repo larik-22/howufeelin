@@ -13,23 +13,26 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
-  ListItemSecondaryAction,
   Avatar,
   IconButton,
   Menu,
   MenuItem,
   Divider,
   Chip,
-  Tooltip,
   Snackbar,
+  Badge,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
+import StarIcon from '@mui/icons-material/Star';
+import PersonIcon from '@mui/icons-material/Person';
+
 import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
 import { GroupMemberRole } from '@/services/groupService';
+import { getRoleColor, getRoleLabel, canManageMember, canRemoveMember } from '@/utils/roleUtils';
 
 interface GroupMembersDialogProps {
   open: boolean;
@@ -50,7 +53,7 @@ export default function GroupMembersDialog({
   user,
 }: GroupMembersDialogProps) {
   const [members, setMembers] = useState<GroupMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -61,13 +64,13 @@ export default function GroupMembersDialog({
   useEffect(() => {
     if (!open || !group) return;
 
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
 
     // Subscribe to group members updates
     const unsubscribe = groupService.subscribeToGroupMembers(group.groupId, updatedMembers => {
       setMembers(updatedMembers);
-      setLoading(false);
+      setIsLoading(false);
     });
 
     // Clean up subscription when component unmounts or dialog closes
@@ -135,80 +138,27 @@ export default function GroupMembersDialog({
     }
   };
 
-  const handleRemoveMember = async () => {
-    if (!selectedMember) return;
+  const handleRemoveMember = async (member: GroupMember) => {
+    if (!group) return;
 
     try {
       setIsUpdating(true);
-
-      // Prevent removing the admin (group creator)
-      if (selectedMember.role === GroupMemberRole.ADMIN) {
-        setNotification({
-          message: 'Cannot remove the group admin (creator)',
-          type: 'error',
-        });
-        handleMenuClose();
-        setIsUpdating(false);
-        return;
-      }
-
-      await groupService.removeMemberFromGroup(group.groupId, selectedMember.userId);
-
-      setNotification({
-        message: 'Member removed from group',
-        type: 'success',
-      });
-
-      handleMenuClose();
+      setError(null);
+      await groupService.removeMemberFromGroup(group.groupId, member.userId);
+      setSelectedMember(null);
     } catch (err) {
-      console.error('Error removing member:', err);
-      setNotification({
-        message: 'Failed to remove member',
-        type: 'error',
-      });
+      setError(err instanceof Error ? err.message : 'Failed to remove member');
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const getRoleChipColor = (role: GroupMemberRole) => {
-    switch (role) {
-      case GroupMemberRole.ADMIN:
-        return 'primary';
-      case GroupMemberRole.MODERATOR:
-        return 'secondary';
-      default:
-        return 'default';
-    }
-  };
-
-  const canManageMember = (member: GroupMember) => {
-    // Can't manage the admin (group creator)
-    if (member.role === GroupMemberRole.ADMIN) {
-      return false;
-    }
-
-    // Admins and moderators can manage regular members
-    return group.userRole === GroupMemberRole.ADMIN || group.userRole === GroupMemberRole.MODERATOR;
-  };
-
-  const canRemoveMember = (member: GroupMember) => {
-    // Can't remove yourself
-    if (member.userId === user.userId) {
-      return false;
-    }
-
-    // Can't remove the admin (group creator)
-    if (member.role === GroupMemberRole.ADMIN) {
-      return false;
-    }
-
-    // Admins and moderators can remove regular members
-    return group.userRole === GroupMemberRole.ADMIN || group.userRole === GroupMemberRole.MODERATOR;
-  };
-
   const isGroupCreator = (member: GroupMember) => {
     return member.userId === group.createdBy;
+  };
+
+  const isCurrentUser = (member: GroupMember) => {
+    return member.userId === user.userId;
   };
 
   return (
@@ -231,7 +181,7 @@ export default function GroupMembersDialog({
             </Alert>
           )}
 
-          {loading ? (
+          {isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
@@ -245,18 +195,86 @@ export default function GroupMembersDialog({
             <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
               {members.map((member, index) => (
                 <Box key={member.userId}>
-                  <ListItem alignItems="flex-start">
+                  <ListItem
+                    alignItems="flex-start"
+                    sx={{
+                      bgcolor: isCurrentUser(member) ? 'action.selected' : 'transparent',
+                      borderRadius: 1,
+                      mb: 1,
+                      border: isCurrentUser(member) ? '1px solid' : 'none',
+                      borderColor: 'primary.light',
+                    }}
+                  >
                     <ListItemAvatar>
-                      <Avatar src={member.photoURL} alt={member.displayName}>
-                        {member.displayName.charAt(0)}
-                      </Avatar>
+                      <Badge
+                        overlap="circular"
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        badgeContent={
+                          isGroupCreator(member) ? (
+                            <StarIcon sx={{ color: 'primary.main', fontSize: '1rem' }} />
+                          ) : isCurrentUser(member) ? (
+                            <PersonIcon
+                              sx={{
+                                color: 'secondary.dark',
+                                backgroundColor: 'secondary.light',
+                                borderRadius: '50%',
+                                fontSize: '1rem',
+                              }}
+                            />
+                          ) : null
+                        }
+                      >
+                        <Avatar
+                          src={member.photoURL}
+                          alt={member.displayName}
+                          sx={{
+                            border: isGroupCreator(member) ? '2px solid' : 'none',
+                            borderColor: 'primary.main',
+                            width: isGroupCreator(member) ? 48 : 40,
+                            height: isGroupCreator(member) ? 48 : 40,
+                          }}
+                        >
+                          {member.displayName.charAt(0)}
+                        </Avatar>
+                      </Badge>
                     </ListItemAvatar>
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography variant="subtitle1">{member.displayName}</Typography>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{
+                              fontWeight: isGroupCreator(member) ? 'bold' : 'normal',
+                              color: isGroupCreator(member) ? 'primary.main' : 'text.primary',
+                            }}
+                          >
+                            {member.displayName}
+                            {isCurrentUser(member) && (
+                              <Typography
+                                component="span"
+                                variant="caption"
+                                sx={{
+                                  ml: 1,
+                                  color: 'secondary.main',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                (You)
+                              </Typography>
+                            )}
+                          </Typography>
                           {isGroupCreator(member) && (
-                            <Chip size="small" label="Creator" color="primary" sx={{ ml: 1 }} />
+                            <Chip
+                              size="small"
+                              label="Creator"
+                              color="primary"
+                              sx={{
+                                ml: 1,
+                                fontWeight: 'bold',
+                                backgroundColor: 'primary.light',
+                                color: 'primary.dark',
+                              }}
+                            />
                           )}
                         </Box>
                       }
@@ -271,29 +289,24 @@ export default function GroupMembersDialog({
                             {member.email}
                           </Typography>
                           <Chip
+                            label={getRoleLabel(member.role)}
+                            color={getRoleColor(member.role)}
                             size="small"
-                            label={member.role}
-                            color={getRoleChipColor(member.role)}
-                            sx={{ ml: 1 }}
                           />
                         </Box>
                       }
                       primaryTypographyProps={{ component: 'div' }}
                       secondaryTypographyProps={{ component: 'div' }}
                     />
-                    {canManageMember(member) && (
-                      <ListItemSecondaryAction>
-                        <Tooltip title="Manage member">
-                          <IconButton
-                            edge="end"
-                            aria-label="more"
-                            onClick={e => handleMenuOpen(e, member)}
-                            disabled={isUpdating}
-                          >
-                            <MoreVertIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </ListItemSecondaryAction>
+                    {canManageMember(
+                      group.userRole || GroupMemberRole.MEMBER,
+                      member.role || GroupMemberRole.MEMBER,
+                      member.userId === user.userId,
+                      member.role === GroupMemberRole.ADMIN
+                    ) && (
+                      <IconButton size="small" onClick={event => handleMenuOpen(event, member)}>
+                        <MoreVertIcon />
+                      </IconButton>
                     )}
                   </ListItem>
                   {index < members.length - 1 && <Divider variant="inset" component="li" />}
@@ -321,12 +334,22 @@ export default function GroupMembersDialog({
             Make Member
           </MenuItem>
         )}
-        {selectedMember && canRemoveMember(selectedMember) && (
-          <MenuItem onClick={handleRemoveMember} disabled={isUpdating} sx={{ color: 'error.main' }}>
-            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-            Remove from Group
-          </MenuItem>
-        )}
+        {selectedMember &&
+          canRemoveMember(
+            group.userRole || GroupMemberRole.MEMBER,
+            selectedMember.role || GroupMemberRole.MEMBER,
+            selectedMember.userId === user.userId,
+            selectedMember.role === GroupMemberRole.ADMIN
+          ) && (
+            <MenuItem
+              onClick={() => handleRemoveMember(selectedMember)}
+              disabled={isUpdating}
+              sx={{ color: 'error.main' }}
+            >
+              <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+              Remove from Group
+            </MenuItem>
+          )}
       </Menu>
 
       <Snackbar
