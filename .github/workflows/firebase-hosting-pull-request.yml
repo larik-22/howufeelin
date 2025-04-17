@@ -22,11 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci && npm run build
-      - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: latest-dist
-          path: dist/
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
