@@ -114,6 +114,15 @@ export default function GroupDetail() {
     const membersUnsubscribe = groupService.subscribeToGroupMembers(groupId, updatedMembers => {
       setGroupMembers(updatedMembers);
       setMemberCount(updatedMembers.length);
+
+      // Update the current user's role if it has changed
+      const currentUserMember = updatedMembers.find(m => m.userId === auth.myUser?.userId);
+      if (currentUserMember) {
+        setGroup(prevGroup => {
+          if (!prevGroup) return prevGroup;
+          return { ...prevGroup, userRole: currentUserMember.role };
+        });
+      }
     });
 
     // Clean up subscriptions when component unmounts

@@ -30,6 +30,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PeopleIcon from '@mui/icons-material/People';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import GroupFormDialog from '@/components/GroupFormDialog';
 import JoinGroupDialog from '@/components/JoinGroupDialog';
 import GroupMembersDialog from '@/components/GroupMembersDialog';
@@ -101,25 +102,44 @@ export default function Groups() {
 
     setLoading(true); // Set loading when starting subscription
     const memberCountSubscriptions: (() => void)[] = [];
+    const memberRoleSubscriptions: (() => void)[] = [];
 
     // Subscribe to user groups updates
     const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
       setGroups(updatedGroups);
       setLoading(false); // Clear loading when groups are received
 
-      // Clean up previous member count subscriptions
+      // Clean up previous subscriptions
       memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
       memberCountSubscriptions.length = 0;
+      memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
+      memberRoleSubscriptions.length = 0;
 
       // Set up new subscriptions for each group's members
       updatedGroups.forEach(group => {
-        const unsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
+        // Subscribe to member count updates
+        const countUnsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
           setMemberCounts(prevCounts => ({
             ...prevCounts,
             [group.groupId]: members.length,
           }));
         });
-        memberCountSubscriptions.push(unsubscribe);
+        memberCountSubscriptions.push(countUnsubscribe);
+
+        // Subscribe to member role updates
+        const roleUnsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
+          // Find the current user's role in this group
+          const currentUserMember = members.find(m => m.userId === auth.myUser?.userId);
+          if (currentUserMember) {
+            // Update the group with the new role
+            setGroups(prevGroups =>
+              prevGroups.map(g =>
+                g.groupId === group.groupId ? { ...g, userRole: currentUserMember.role } : g
+              )
+            );
+          }
+        });
+        memberRoleSubscriptions.push(roleUnsubscribe);
       });
 
       // Clean up member counts for groups that are no longer in the list
@@ -138,6 +158,7 @@ export default function Groups() {
     return () => {
       unsubscribe();
       memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
+      memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
       setLoading(false); // Ensure loading is cleared on unmount
     };
   }, [auth?.myUser?.userId]);
@@ -428,11 +449,23 @@ export default function Groups() {
             <Button
               size="small"
               color="primary"
+              variant="outlined"
+              startIcon={<ManageAccountsIcon />}
               onClick={e => {
                 e.stopPropagation(); // Prevent card click when clicking manage members
                 handleOpenMembersDialog(group);
               }}
-              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
+              sx={{
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 500,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                '&:hover': {
+                  backgroundColor: 'rgba(143, 197, 163, 0.08)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                },
+              }}
             >
               Manage Members
             </Button>
