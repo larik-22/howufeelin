@@ -14,7 +14,7 @@ jobs:
       - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: latest-dist
           path: dist/
 
       - name: Deploy to Firebase Hosting

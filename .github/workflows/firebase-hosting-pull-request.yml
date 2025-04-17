@@ -25,7 +25,7 @@ jobs:
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: latest-dist
           path: dist/
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
