@@ -1,36 +1,28 @@
-name: Deploy to Firebase Hosting (production)
+name: Deploy to Firebase Hosting on Merge
 on:
-  release:
-    types: [published]
-
-permissions:
-  contents: read # only reading the ZIP asset
-  id-token: write # if you use OIDC runs-to-GCP
+  push:
+    branches:
+      - main
 
 jobs:
-  deploy:
+  deploy_to_production:
     runs-on: ubuntu-latest
     environment: prod
-
+    env:
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
     steps:
-      - name: Download `dist.zip`
-        run: |
-          ASSET_ID=$(gh release view "${{ github.event.release.tag_name }}" \
-            --repo "${{ github.repository }}" \
-            --json assets --jq '.assets[] | select(.name=="dist.zip") | .id')
-          gh release download "${{ github.event.release.tag_name }}" \
-            --repo "${{ github.repository }}" \
-            --pattern dist.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Unzip `dist.zip`
-        run: unzip dist.zip -d .
-
-      - name: Deploy to live channel
+      - uses: actions/checkout@v4
+      - name: Re-build
+        run: npm ci && npm run build
+      - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HOWUFEELIN_6C920 }}
           projectId: howufeelin-6c920
           channelId: live
