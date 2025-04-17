@@ -21,17 +21,4 @@ export default defineConfig({
       '@services': path.resolve(__dirname, './src/services'),
     },
   },
-  build: {
-    outDir: 'dist',
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router'],
-          firebase: ['firebase/auth', 'firebase/firestore'],
-          mui: ['@mui/material', '@mui/icons-material', '@mui/x-charts', '@mui/x-date-pickers'],
-        },
-      },
-    },
-  },
 });
