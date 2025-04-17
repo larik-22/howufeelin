@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
 import {
@@ -21,6 +21,16 @@ import {
   DialogActions,
   useMediaQuery,
   useTheme,
+  TextField,
+  InputAdornment,
+  Tabs,
+  Tab,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Paper,
+  SelectChangeEvent,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import GroupIcon from '@mui/icons-material/Group';
@@ -31,6 +41,8 @@ import PeopleIcon from '@mui/icons-material/People';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import SearchIcon from '@mui/icons-material/Search';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import GroupFormDialog from '@/components/GroupFormDialog';
 import JoinGroupDialog from '@/components/JoinGroupDialog';
 import GroupMembersDialog from '@/components/GroupMembersDialog';
@@ -46,6 +58,10 @@ interface Notification {
   message: string;
   type: 'success' | 'error' | 'info';
 }
+
+// Filter types
+type FilterTab = 'all' | 'admin' | 'moderator' | 'member';
+type SortOption = 'name' | 'members' | 'recent';
 
 export default function Groups() {
   const auth = useContext(AuthContext);
@@ -68,6 +84,12 @@ export default function Groups() {
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
   const [selectedGroupForMembers, setSelectedGroupForMembers] = useState<Group | null>(null);
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('all');
+  const [sortOption, setSortOption] = useState<SortOption>('name');
+  const [showFilters, setShowFilters] = useState(false);
 
   // Set up real-time subscription for user groups
   useEffect(() => {
@@ -156,6 +178,67 @@ export default function Groups() {
       setLoading(false); // Ensure loading is cleared on unmount
     };
   }, [auth?.myUser?.userId]);
+
+  // Filter and sort groups
+  const filteredGroups = useMemo(() => {
+    let result = [...groups];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        group =>
+          group.groupName.toLowerCase().includes(query) ||
+          group.groupDescription.toLowerCase().includes(query) ||
+          group.joinCode.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply role filter
+    if (activeFilterTab !== 'all') {
+      result = result.filter(group => {
+        switch (activeFilterTab) {
+          case 'admin':
+            return group.userRole === GroupMemberRole.ADMIN;
+          case 'moderator':
+            return group.userRole === GroupMemberRole.MODERATOR;
+          case 'member':
+            return group.userRole === GroupMemberRole.MEMBER;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      switch (sortOption) {
+        case 'name':
+          return a.groupName.localeCompare(b.groupName);
+        case 'members':
+          return (memberCounts[b.groupId] || 0) - (memberCounts[a.groupId] || 0);
+        case 'recent': {
+          // Handle Timestamp type properly
+          // Using a more specific approach for Firestore Timestamp
+          const getTimestamp = (timestamp: unknown): number => {
+            if (!timestamp) return 0;
+            // Check if it's a Firestore Timestamp with toMillis method
+            if (typeof timestamp === 'object' && timestamp !== null && 'toMillis' in timestamp) {
+              return (timestamp as { toMillis: () => number }).toMillis();
+            }
+            // Fallback to timestamp value if it's a number
+            return typeof timestamp === 'number' ? timestamp : 0;
+          };
+
+          return getTimestamp(b.createdAt) - getTimestamp(a.createdAt);
+        }
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [groups, searchQuery, activeFilterTab, sortOption, memberCounts]);
 
   const handleOpenCreateDialog = () => {
     setDialogMode('create');
@@ -311,6 +394,23 @@ export default function Groups() {
   const handleCloseMembersDialog = () => {
     setIsMembersDialogOpen(false);
     setSelectedGroupForMembers(null);
+  };
+
+  // Filter handlers
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleFilterTabChange = (event: React.SyntheticEvent, newValue: FilterTab) => {
+    setActiveFilterTab(newValue);
+  };
+
+  const handleSortChange = (event: SelectChangeEvent<SortOption>) => {
+    setSortOption(event.target.value as SortOption);
+  };
+
+  const toggleFilters = () => {
+    setShowFilters(!showFilters);
   };
 
   const renderGroupCard = (group: Group) => {
@@ -555,23 +655,135 @@ export default function Groups() {
         </Box>
       </Box>
 
-      {groups.length === 0 ? (
+      {/* Search and Filter Section */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2,
+          mb: 3,
+          borderRadius: 2,
+          border: '1px solid',
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: showFilters ? 2 : 0 }}>
+          <TextField
+            fullWidth
+            placeholder="Search groups by name, description, or join code"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            variant="outlined"
+            size="small"
+            sx={{ mr: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Tooltip title={showFilters ? 'Hide filters' : 'Show filters'}>
+            <IconButton onClick={toggleFilters} color={showFilters ? 'primary' : 'default'}>
+              <FilterListIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Filter Options */}
+        {showFilters && (
+          <Box sx={{ mt: 2 }}>
+            <Box
+              sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, mb: 2 }}
+            >
+              <FormControl fullWidth size="small">
+                <InputLabel id="sort-label">Sort by</InputLabel>
+                <Select
+                  labelId="sort-label"
+                  value={sortOption}
+                  onChange={handleSortChange}
+                  label="Sort by"
+                >
+                  <MenuItem value="name">Name</MenuItem>
+                  <MenuItem value="members">Members</MenuItem>
+                  <MenuItem value="recent">Most Recent</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+
+            <Tabs
+              value={activeFilterTab}
+              onChange={handleFilterTabChange}
+              variant="scrollable"
+              scrollButtons="auto"
+              aria-label="group filter tabs"
+              sx={{ borderBottom: 1, borderColor: 'divider' }}
+            >
+              <Tab label="All Groups" value="all" />
+              <Tab label="Admin" value="admin" icon={<ManageAccountsIcon />} iconPosition="start" />
+              <Tab label="Moderator" value="moderator" icon={<PeopleIcon />} iconPosition="start" />
+              <Tab label="Member" value="member" icon={<GroupIcon />} iconPosition="start" />
+            </Tabs>
+          </Box>
+        )}
+      </Paper>
+
+      {/* Filter Summary */}
+      {(searchQuery || activeFilterTab !== 'all') && (
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Showing {filteredGroups.length} of {groups.length} groups
+          </Typography>
+          {(searchQuery || activeFilterTab !== 'all') && (
+            <Button
+              size="small"
+              onClick={() => {
+                setSearchQuery('');
+                setActiveFilterTab('all');
+              }}
+              sx={{ ml: 1 }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </Box>
+      )}
+
+      {filteredGroups.length === 0 ? (
         <Card sx={{ p: { xs: 2, sm: 4 }, textAlign: 'center' }}>
           <GroupIcon sx={{ fontSize: { xs: 36, sm: 48 }, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
-            You haven't joined any groups yet
+            {groups.length === 0
+              ? "You haven't joined any groups yet"
+              : 'No groups match your filters'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Create a new group or ask someone to share their group's join code with you
+            {groups.length === 0
+              ? "Create a new group or ask someone to share their group's join code with you"
+              : "Try adjusting your search or filters to find what you're looking for"}
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenCreateDialog}
-          >
-            Create Your First Group
-          </Button>
+          {groups.length === 0 ? (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenCreateDialog}
+            >
+              Create Your First Group
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => {
+                setSearchQuery('');
+                setActiveFilterTab('all');
+              }}
+            >
+              Clear Filters
+            </Button>
+          )}
         </Card>
       ) : (
         <Box
@@ -581,7 +793,7 @@ export default function Groups() {
             gap: { xs: 2, sm: 3 },
           }}
         >
-          {groups.map(renderGroupCard)}
+          {filteredGroups.map(renderGroupCard)}
         </Box>
       )}
 
