@@ -29,7 +29,7 @@ interface MoodInputProps {
 export const MoodInput = ({ hasRatedToday, onSubmit }: MoodInputProps) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [moodRating, setMoodRating] = useState<number>(5);
+  const [moodRating, setMoodRating] = useState<number>(7);
   const [moodNote, setMoodNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showMoodEmoji, setShowMoodEmoji] = useState<boolean>(false);
