@@ -12,6 +12,13 @@ import {
   orderBy,
   limit,
   writeBatch,
+  onSnapshot,
+  Unsubscribe,
+  DocumentData,
+  QuerySnapshot,
+  DocumentReference,
+  getDocFromCache,
+  getDocFromServer,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Rating, RATING_MIN, RATING_MAX, isValidRating, createRatingId } from '@/types/Rating';
@@ -77,42 +84,48 @@ export interface RatingService {
     calendarRatings: Rating[];
     hasRatedToday: boolean;
   }>;
+
+  // Subscribe to today's ratings for a group
+  subscribeToTodayRatings(groupId: string, callback: (ratings: Rating[]) => void): Unsubscribe;
+
+  // Subscribe to a user's rating for today
+  subscribeToUserTodayRating(
+    groupId: string,
+    userId: string,
+    callback: (rating: Rating | null) => void
+  ): Unsubscribe;
+
+  // Subscribe to ratings for a date range
+  subscribeToRatingsForDateRange(
+    groupId: string,
+    startDate: string,
+    endDate: string,
+    callback: (ratings: Rating[]) => void
+  ): Unsubscribe;
+
+  // Check if a subscription is active
+  isSubscriptionActive(type: string, id: string): boolean;
+
+  // Unsubscribe from all active subscriptions
+  unsubscribeAll(): void;
 }
 
 class FirestoreRatingService implements RatingService {
-  async deleteAllRatingsForGroup(groupId: string): Promise<void> {
-    try {
-      // Query all ratings for this group
-      const q = query(collection(db, this.COLLECTION), where('groupId', '==', groupId));
-
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        return; // No ratings to delete
-      }
-
-      // Use a batch to delete all ratings in a single transaction
-      const batch = writeBatch(db);
-
-      querySnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-
-      await batch.commit();
-
-      console.log(`Deleted ${querySnapshot.size} ratings for group ${groupId}`);
-    } catch (error) {
-      console.error('Error deleting all ratings for group:', error);
-      throw new RatingError('Failed to delete all ratings for group', 'DELETE_FAILED');
-    }
-  }
   private readonly COLLECTION = 'ratings';
   private readonly MAX_RATINGS_PER_QUERY = 1000;
+  private activeSubscriptions: Record<string, Unsubscribe> = {};
+  private ratingsCollection = collection(db, this.COLLECTION);
 
-  private getRatingDocRef(ratingId: string) {
-    return doc(db, this.COLLECTION, ratingId);
+  /**
+   * Get a document reference for a rating
+   */
+  private getRatingDocRef(ratingId: string): DocumentReference {
+    return doc(this.ratingsCollection, ratingId);
   }
 
+  /**
+   * Get today's date in YYYY-MM-DD format
+   */
   private getTodayString(): string {
     const now = new Date();
     const year = now.getFullYear();
@@ -121,7 +134,10 @@ class FirestoreRatingService implements RatingService {
     return `${year}-${month}-${day}`;
   }
 
-  private validateRatingInput(ratingNumber: number, notes?: string) {
+  /**
+   * Validate rating input
+   */
+  private validateRatingInput(ratingNumber: number, notes?: string): void {
     if (!isValidRating(ratingNumber)) {
       throw new RatingError(
         `Rating must be an integer between ${RATING_MIN} and ${RATING_MAX}`,
@@ -134,6 +150,76 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Generate a unique subscription ID
+   */
+  private generateSubscriptionId(type: string, id: string): string {
+    return `${type}_${id}`;
+  }
+
+  /**
+   * Unsubscribe from a specific subscription
+   */
+  private unsubscribe(subscriptionId: string): void {
+    if (this.activeSubscriptions[subscriptionId]) {
+      console.log(`Unsubscribing from ${subscriptionId}`);
+      this.activeSubscriptions[subscriptionId]();
+      delete this.activeSubscriptions[subscriptionId];
+    }
+  }
+
+  /**
+   * Unsubscribe from all active subscriptions
+   */
+  public unsubscribeAll(): void {
+    const count = Object.keys(this.activeSubscriptions).length;
+    if (count > 0) {
+      console.log(`Unsubscribing from ${count} active subscriptions`);
+      Object.keys(this.activeSubscriptions).forEach(id => {
+        this.unsubscribe(id);
+      });
+    }
+  }
+
+  /**
+   * Check if a subscription is active
+   */
+  public isSubscriptionActive(type: string, id: string): boolean {
+    const subscriptionId = this.generateSubscriptionId(type, id);
+    return !!this.activeSubscriptions[subscriptionId];
+  }
+
+  /**
+   * Delete all ratings for a group
+   */
+  async deleteAllRatingsForGroup(groupId: string): Promise<void> {
+    try {
+      // Query all ratings for this group
+      const q = query(this.ratingsCollection, where('groupId', '==', groupId));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        console.log(`No ratings found for group ${groupId}`);
+        return; // No ratings to delete
+      }
+
+      // Use a batch to delete all ratings in a single transaction
+      const batch = writeBatch(db);
+      querySnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+      console.log(`Deleted ${querySnapshot.size} ratings for group ${groupId}`);
+    } catch (error) {
+      console.error('Error deleting all ratings for group:', error);
+      throw new RatingError('Failed to delete all ratings for group', 'DELETE_FAILED');
+    }
+  }
+
+  /**
+   * Create a new rating
+   */
   async createRating(
     groupId: string,
     userId: string,
@@ -176,11 +262,14 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Get all ratings for a group on a specific date
+   */
   async getGroupRatingsForDate(groupId: string, date: string): Promise<Rating[]> {
     try {
       const prefix = `${groupId}_${date}_`;
       const q = query(
-        collection(db, this.COLLECTION),
+        this.ratingsCollection,
         where('ratingId', '>=', prefix),
         where('ratingId', '<=', prefix + '\uf8ff'),
         orderBy('ratingId'),
@@ -195,6 +284,9 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Get a group's ratings for a date range
+   */
   async getGroupRatingsForDateRange(
     groupId: string,
     startDate: string,
@@ -205,7 +297,7 @@ class FirestoreRatingService implements RatingService {
       const endPrefix = `${groupId}_${endDate}_`;
 
       const q = query(
-        collection(db, this.COLLECTION),
+        this.ratingsCollection,
         where('ratingId', '>=', startPrefix),
         where('ratingId', '<=', endPrefix + '\uf8ff'),
         orderBy('ratingId'),
@@ -221,6 +313,9 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Get all necessary rating data for the group detail page
+   */
   async getGroupDetailRatings(
     groupId: string,
     userId: string
@@ -257,6 +352,9 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Get a user's rating for a specific date
+   */
   async getUserRatingForDate(
     groupId: string,
     userId: string,
@@ -265,7 +363,20 @@ class FirestoreRatingService implements RatingService {
     try {
       const ratingId = createRatingId(groupId, date, userId);
       const ratingRef = this.getRatingDocRef(ratingId);
-      const ratingDoc = await getDoc(ratingRef);
+
+      // Try to get from cache first
+      try {
+        const cachedDoc = await getDocFromCache(ratingRef);
+        if (cachedDoc.exists()) {
+          return cachedDoc.data() as Rating;
+        }
+      } catch {
+        // If not in cache, continue to server
+        console.log('Rating not found in cache, fetching from server');
+      }
+
+      // If not in cache, get from server
+      const ratingDoc = await getDocFromServer(ratingRef);
 
       if (!ratingDoc.exists()) {
         return null;
@@ -278,6 +389,9 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Get a user's ratings for a date range
+   */
   async getUserRatingsForDateRange(
     groupId: string,
     userId: string,
@@ -291,9 +405,11 @@ class FirestoreRatingService implements RatingService {
       const endPrefix = `${groupId}_${endDate}_${userId}`;
 
       const q = query(
-        collection(db, 'ratings'),
+        this.ratingsCollection,
         where('ratingId', '>=', startPrefix),
-        where('ratingId', '<=', endPrefix)
+        where('ratingId', '<=', endPrefix),
+        orderBy('ratingId'),
+        orderBy('createdAt', 'desc')
       );
 
       const querySnapshot = await getDocs(q);
@@ -304,6 +420,9 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Update an existing rating
+   */
   async updateRating(
     ratingId: string,
     updates: Partial<Omit<Rating, 'ratingId' | 'groupId' | 'userId' | 'ratingDate' | 'createdAt'>>
@@ -335,6 +454,9 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Delete a rating
+   */
   async deleteRating(ratingId: string): Promise<void> {
     try {
       const ratingRef = this.getRatingDocRef(ratingId);
@@ -354,18 +476,154 @@ class FirestoreRatingService implements RatingService {
     }
   }
 
+  /**
+   * Check if a user has already rated today
+   */
   async hasUserRatedToday(groupId: string, userId: string): Promise<boolean> {
     try {
       const today = this.getTodayString();
       const ratingId = createRatingId(groupId, today, userId);
       const ratingRef = this.getRatingDocRef(ratingId);
-      const ratingDoc = await getDoc(ratingRef);
 
+      // Try to get from cache first
+      try {
+        const cachedDoc = await getDocFromCache(ratingRef);
+        return cachedDoc.exists();
+      } catch {
+        // If not in cache, continue to server
+        console.log('Rating not found in cache, checking server');
+      }
+
+      // If not in cache, get from server
+      const ratingDoc = await getDocFromServer(ratingRef);
       return ratingDoc.exists();
     } catch (error) {
       console.error('Error checking if user has rated today:', error);
       return false;
     }
+  }
+
+  /**
+   * Subscribe to today's ratings for a group
+   */
+  subscribeToTodayRatings(groupId: string, callback: (ratings: Rating[]) => void): Unsubscribe {
+    const subscriptionId = this.generateSubscriptionId('todayRatings', groupId);
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    const today = this.getTodayString();
+    const prefix = `${groupId}_${today}_`;
+
+    const q = query(
+      this.ratingsCollection,
+      where('ratingId', '>=', prefix),
+      where('ratingId', '<=', prefix + '\uf8ff'),
+      orderBy('ratingId'),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot: QuerySnapshot<DocumentData>) => {
+        const ratings = querySnapshot.docs.map(doc => doc.data() as Rating);
+        callback(ratings);
+      },
+      error => {
+        console.error('Error subscribing to today ratings:', error);
+        callback([]);
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
+  }
+
+  /**
+   * Subscribe to a user's rating for today
+   */
+  subscribeToUserTodayRating(
+    groupId: string,
+    userId: string,
+    callback: (rating: Rating | null) => void
+  ): Unsubscribe {
+    const subscriptionId = this.generateSubscriptionId('userTodayRating', `${groupId}_${userId}`);
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    const today = this.getTodayString();
+    const ratingId = createRatingId(groupId, today, userId);
+    const ratingRef = this.getRatingDocRef(ratingId);
+
+    const unsubscribe = onSnapshot(
+      ratingRef,
+      doc => {
+        if (doc.exists()) {
+          callback(doc.data() as Rating);
+        } else {
+          callback(null);
+        }
+      },
+      error => {
+        console.error('Error subscribing to user today rating:', error);
+        callback(null);
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
+  }
+
+  /**
+   * Subscribe to ratings for a date range
+   */
+  subscribeToRatingsForDateRange(
+    groupId: string,
+    startDate: string,
+    endDate: string,
+    callback: (ratings: Rating[]) => void
+  ): Unsubscribe {
+    const subscriptionId = this.generateSubscriptionId(
+      'dateRangeRatings',
+      `${groupId}_${startDate}_${endDate}`
+    );
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    const startPrefix = `${groupId}_${startDate}_`;
+    const endPrefix = `${groupId}_${endDate}_`;
+
+    const q = query(
+      this.ratingsCollection,
+      where('ratingId', '>=', startPrefix),
+      where('ratingId', '<=', endPrefix + '\uf8ff'),
+      orderBy('ratingId'),
+      orderBy('createdAt', 'desc'),
+      limit(this.MAX_RATINGS_PER_QUERY)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot: QuerySnapshot<DocumentData>) => {
+        const ratings = querySnapshot.docs.map(doc => doc.data() as Rating);
+        callback(ratings);
+      },
+      error => {
+        console.error('Error subscribing to ratings for date range:', error);
+        callback([]);
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
   }
 }
 
