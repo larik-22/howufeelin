@@ -1,31 +1,36 @@
-name: Deploy to Firebase Hosting on Merge
+name: Deploy to Firebase Hosting (production)
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
+
+permissions:
+  contents: read # only reading the ZIP asset
+  id-token: write # if you use OIDC runs-to-GCP
 
 jobs:
-  deploy_to_production:
+  deploy:
     runs-on: ubuntu-latest
     environment: prod
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Release Asset
+      - name: Download `dist.zip`
         run: |
-          curl -L \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/octet-stream" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/assets/$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${{ github.event.pull_request.number }}-draft" | jq -r '.assets[] | select(.name=="dist.zip") | .id')" \
-            -o dist.zip
+          ASSET_ID=$(gh release view "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[] | select(.name=="dist.zip") | .id')
+          gh release download "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern dist.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Unzip dist
+      - name: Unzip `dist.zip`
         run: unzip dist.zip -d .
 
-      - name: Deploy to Firebase Hosting
+      - name: Deploy to live channel
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HOWUFEELIN_6C920 }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: howufeelin-6c920
           channelId: live
