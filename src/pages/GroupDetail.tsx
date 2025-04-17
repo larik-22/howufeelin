@@ -17,8 +17,11 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import dayjs from 'dayjs';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 
 import AuthContext from '@/contexts/auth/authContext';
 import { groupService } from '@/services/groupService';
@@ -27,7 +30,7 @@ import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { GroupMemberRole } from '@/services/groupService';
 import { Rating } from '@/types/Rating';
-import { useGroupPermissions } from '@/hooks/useGroupPermissions';
+import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
 import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
 
@@ -37,6 +40,7 @@ import { MoodInput } from '@/components/mood/MoodInput';
 import { MoodCalendar } from '@/components/mood/MoodCalendar';
 import { GroupMembers } from '@/components/group/GroupMembers';
 import { RatingList } from '@/components/mood/RatingList';
+import GroupMembersDialog from '@/components/GroupMembersDialog';
 
 interface Notification {
   message: string;
@@ -54,7 +58,7 @@ export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
-  const { getRoleColor, getRoleLabel } = useGroupPermissions();
+  const { getRoleColor, getRoleLabel, hasPermission } = useGroupPermissions();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -86,6 +90,9 @@ export default function GroupDetail() {
   // New states for leave group confirmation modal
   const [leaveGroupModalOpen, setLeaveGroupModalOpen] = useState<boolean>(false);
   const [leaveGroupLoading, setLeaveGroupLoading] = useState<boolean>(false);
+
+  // New state for Group Members Dialog
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
 
   // Set up real-time subscriptions for group data
   useEffect(() => {
@@ -366,6 +373,14 @@ export default function GroupDetail() {
     }
   };
 
+  const handleOpenMembersDialog = () => {
+    setIsMembersDialogOpen(true);
+  };
+
+  const handleCloseMembersDialog = () => {
+    setIsMembersDialogOpen(false);
+  };
+
   if (loading) {
     return (
       <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, mx: 'auto' }}>
@@ -470,24 +485,44 @@ export default function GroupDetail() {
             groupMembers={groupMembers}
           />
 
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            sx={{
-              mb: { xs: 2, sm: 3 },
-              '& .MuiTab-root': {
-                minWidth: { xs: 'auto', sm: 120 },
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-              },
-            }}
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-          >
-            <Tab label="Today's Moods" />
-            <Tab label="Calendar" />
-            <Tab label="Members" />
-          </Tabs>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 2, sm: 3 } }}>
+            <Tabs
+              value={activeTab}
+              onChange={handleTabChange}
+              sx={{
+                flexGrow: 1,
+                '& .MuiTab-root': {
+                  minWidth: { xs: 'auto', sm: 120 },
+                  fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                },
+              }}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+            >
+              <Tab label="Today's Moods" />
+              <Tab label="Calendar" />
+              <Tab label="Members" />
+            </Tabs>
+
+            {hasPermission(group, GroupPermission.MANAGE_MEMBERS) && (
+              <Tooltip title="Manage Members">
+                <IconButton
+                  color="primary"
+                  onClick={handleOpenMembersDialog}
+                  sx={{
+                    ml: 1,
+                    backgroundColor: 'rgba(143, 197, 163, 0.08)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(143, 197, 163, 0.15)',
+                    },
+                  }}
+                >
+                  <ManageAccountsIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
 
           {activeTab === 0 && (
             <Box>
@@ -592,6 +627,16 @@ export default function GroupDetail() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Group Members Dialog */}
+      {group && auth?.myUser && (
+        <GroupMembersDialog
+          open={isMembersDialogOpen}
+          onClose={handleCloseMembersDialog}
+          group={group}
+          user={auth.myUser}
+        />
+      )}
     </Box>
   );
 }
