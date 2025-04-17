@@ -17,11 +17,8 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import dayjs from 'dayjs';
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 
 import AuthContext from '@/contexts/auth/authContext';
 import { groupService } from '@/services/groupService';
@@ -41,6 +38,7 @@ import { MoodCalendar } from '@/components/mood/MoodCalendar';
 import { GroupMembers } from '@/components/group/GroupMembers';
 import { RatingList } from '@/components/mood/RatingList';
 import GroupMembersDialog from '@/components/GroupMembersDialog';
+import GroupFormDialog from '@/components/GroupFormDialog';
 
 interface Notification {
   message: string;
@@ -93,6 +91,7 @@ export default function GroupDetail() {
 
   // New state for Group Members Dialog
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Set up real-time subscriptions for group data
   useEffect(() => {
@@ -103,6 +102,7 @@ export default function GroupDetail() {
       if (updatedGroup) {
         setGroup(prevGroup => {
           if (!prevGroup) return updatedGroup;
+          // Preserve the user's role when updating the group
           return { ...updatedGroup, userRole: prevGroup.userRole };
         });
       } else {
@@ -381,6 +381,40 @@ export default function GroupDetail() {
     setIsMembersDialogOpen(false);
   };
 
+  const handleOpenEditDialog = () => {
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setIsEditDialogOpen(false);
+  };
+
+  const handleGroupUpdate = (updatedGroup: Group) => {
+    // Update local state immediately for better UX
+    setGroup(prevGroup => ({
+      ...prevGroup!,
+      groupName: updatedGroup.groupName,
+      groupDescription: updatedGroup.groupDescription,
+    }));
+  };
+
+  const handleMemberUpdate = (updatedMember: GroupMember) => {
+    if (!group) return;
+
+    // Update the group members state
+    setGroupMembers(prevMembers =>
+      prevMembers.map(member => (member.userId === updatedMember.userId ? updatedMember : member))
+    );
+
+    // If the updated member is the current user, update their role in the group state
+    if (updatedMember.userId === auth?.myUser?.userId) {
+      setGroup(prevGroup => {
+        if (!prevGroup) return prevGroup;
+        return { ...prevGroup, userRole: updatedMember.role };
+      });
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, mx: 'auto' }}>
@@ -483,6 +517,8 @@ export default function GroupDetail() {
             getRoleColor={getRoleColor}
             loading={loading}
             groupMembers={groupMembers}
+            onEdit={handleOpenEditDialog}
+            canEdit={hasPermission(group, GroupPermission.EDIT_GROUP)}
           />
 
           <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 2, sm: 3 } }}>
@@ -504,24 +540,6 @@ export default function GroupDetail() {
               <Tab label="Calendar" />
               <Tab label="Members" />
             </Tabs>
-
-            {hasPermission(group, GroupPermission.MANAGE_MEMBERS) && (
-              <Tooltip title="Manage Members">
-                <IconButton
-                  color="primary"
-                  onClick={handleOpenMembersDialog}
-                  sx={{
-                    ml: 1,
-                    backgroundColor: 'rgba(143, 197, 163, 0.08)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(143, 197, 163, 0.15)',
-                    },
-                  }}
-                >
-                  <ManageAccountsIcon />
-                </IconButton>
-              </Tooltip>
-            )}
           </Box>
 
           {activeTab === 0 && (
@@ -567,6 +585,8 @@ export default function GroupDetail() {
               getRoleLabel={getRoleLabel}
               getRoleColor={getRoleColor}
               loading={loading}
+              onManageMembers={handleOpenMembersDialog}
+              canManageMembers={hasPermission(group, GroupPermission.MANAGE_MEMBERS)}
             />
           )}
         </>
@@ -633,6 +653,19 @@ export default function GroupDetail() {
         <GroupMembersDialog
           open={isMembersDialogOpen}
           onClose={handleCloseMembersDialog}
+          group={group}
+          user={auth.myUser}
+          onMemberUpdate={handleMemberUpdate}
+        />
+      )}
+
+      {/* Group Edit Dialog */}
+      {group && auth?.myUser && (
+        <GroupFormDialog
+          open={isEditDialogOpen}
+          onClose={handleCloseEditDialog}
+          onSubmit={handleGroupUpdate}
+          mode="edit"
           group={group}
           user={auth.myUser}
         />

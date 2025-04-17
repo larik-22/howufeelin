@@ -8,8 +8,11 @@ import {
   Paper,
   Avatar,
   Skeleton,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import { GroupMemberRole } from '@/services/groupService';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 
 interface Member {
   name: string;
@@ -24,6 +27,8 @@ interface GroupMembersProps {
   getRoleLabel: (role: GroupMemberRole) => string;
   getRoleColor: (role: GroupMemberRole) => 'primary' | 'secondary' | 'default';
   loading?: boolean;
+  onManageMembers?: () => void;
+  canManageMembers?: boolean;
 }
 
 export const GroupMembers = ({
@@ -31,6 +36,8 @@ export const GroupMembers = ({
   getRoleLabel,
   getRoleColor,
   loading = false,
+  onManageMembers,
+  canManageMembers = false,
 }: GroupMembersProps) => {
   if (loading) {
     return (
@@ -66,9 +73,26 @@ export const GroupMembers = ({
   return (
     <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
       <CardContent>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Group Members
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Group Members</Typography>
+          {canManageMembers && onManageMembers && (
+            <Tooltip title="Manage Members">
+              <IconButton
+                color="primary"
+                onClick={onManageMembers}
+                sx={{
+                  backgroundColor: 'rgba(143, 197, 163, 0.08)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(143, 197, 163, 0.15)',
+                  },
+                }}
+              >
+                <ManageAccountsIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+
         <Divider sx={{ mb: 2 }} />
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {members.map((member, index) => {
@@ -98,8 +122,8 @@ export const GroupMembers = ({
                   </Typography>
                   <Chip
                     label={getRoleLabel(member.role)}
-                    size="small"
                     color={getRoleColor(member.role)}
+                    size="small"
                     sx={{ mt: 0.5 }}
                   />
                 </Box>

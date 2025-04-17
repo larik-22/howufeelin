@@ -10,10 +10,13 @@ import {
   Avatar,
   AvatarGroup,
   Skeleton,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import GroupIcon from '@mui/icons-material/Group';
 import PeopleIcon from '@mui/icons-material/People';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import EditIcon from '@mui/icons-material/Edit';
 import { GroupMemberRole } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
@@ -27,6 +30,8 @@ interface GroupDetailsProps {
   getRoleColor: (role?: GroupMemberRole) => 'primary' | 'secondary' | 'default';
   loading?: boolean;
   groupMembers?: GroupMember[];
+  onEdit?: () => void;
+  canEdit?: boolean;
 }
 
 export const GroupDetails = ({
@@ -38,6 +43,8 @@ export const GroupDetails = ({
   getRoleColor,
   loading = false,
   groupMembers = [],
+  onEdit,
+  canEdit = false,
 }: GroupDetailsProps) => {
   return (
     <Card
@@ -71,16 +78,34 @@ export const GroupDetails = ({
               Group Details
             </Typography>
           </Box>
-          <Chip
-            label={getRoleLabel(group.userRole)}
-            color={getRoleColor(group.userRole)}
-            size="small"
-            sx={{
-              fontWeight: 'bold',
-              height: { xs: 24, sm: 28 },
-              fontSize: { xs: '0.7rem', sm: '0.75rem' },
-            }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {canEdit && onEdit && (
+              <Tooltip title="Edit Group">
+                <IconButton
+                  color="primary"
+                  onClick={onEdit}
+                  sx={{
+                    backgroundColor: 'rgba(143, 197, 163, 0.08)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(143, 197, 163, 0.15)',
+                    },
+                  }}
+                >
+                  <EditIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Chip
+              label={getRoleLabel(group.userRole)}
+              color={getRoleColor(group.userRole)}
+              size="small"
+              sx={{
+                fontWeight: 'bold',
+                height: { xs: 24, sm: 28 },
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+              }}
+            />
+          </Box>
         </Box>
         <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
         <Typography
