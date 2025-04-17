@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,7 +26,7 @@ export const MAX_GROUP_DESCRIPTION_LENGTH = 200;
 export interface GroupFormDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: (updatedGroup: Group) => void;
   mode: 'create' | 'edit';
   group: Group | null;
   user: MyUser;
@@ -47,7 +47,6 @@ export default function GroupFormDialog({
 }: GroupFormDialogProps) {
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
@@ -56,12 +55,26 @@ export default function GroupFormDialog({
   );
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Memoize handleClose to prevent unnecessary re-renders
+  const handleClose = useCallback(() => {
+    setGroupName('');
+    setGroupDescription('');
+    setError('');
+    setNameError(null);
+    setDescriptionError(null);
+    setCreatedGroup(null);
+    setCopiedCode(null);
+    setNotification(null);
+    onClose();
+  }, [onClose]);
 
   // Update form values when group changes (for edit mode)
   useEffect(() => {
     if (mode === 'edit' && group) {
       setGroupName(group.groupName);
-      setGroupDescription(group.groupDescription);
+      setGroupDescription(group.groupDescription || '');
     } else if (mode === 'create') {
       setGroupName('');
       setGroupDescription('');
@@ -72,7 +85,37 @@ export default function GroupFormDialog({
     setCreatedGroup(null);
     setCopiedCode(null);
     setNotification(null);
-  }, [mode, group]);
+  }, [mode, group, open]);
+
+  // Subscribe to group updates when in edit mode
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    if (open && mode === 'edit' && group?.groupId) {
+      // Subscribe to group updates
+      unsubscribe = groupService.subscribeToGroup(group.groupId, updatedGroup => {
+        if (updatedGroup) {
+          // Only update if the values are different from what we're currently editing
+          if (updatedGroup.groupName !== groupName) {
+            setGroupName(updatedGroup.groupName);
+          }
+          if (updatedGroup.groupDescription !== groupDescription) {
+            setGroupDescription(updatedGroup.groupDescription || '');
+          }
+        } else {
+          // Group was deleted or user lost access
+          setError('Group no longer exists or you no longer have access to it.');
+          handleClose();
+        }
+      });
+    }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [open, mode, group?.groupId, handleClose]);
 
   const validateForm = (): boolean => {
     let isValid = true;
@@ -125,50 +168,64 @@ export default function GroupFormDialog({
     }
 
     try {
-      setLoading(true);
+      setIsSubmitting(true);
       setError(null);
 
       if (mode === 'create' && user) {
+        // Create the group
         const newGroup = await groupService.createGroup(groupName, groupDescription, user);
+
+        // Store the created group info for display
         setCreatedGroup({ groupId: newGroup.groupId, joinCode: newGroup.joinCode });
-        // Don't close the dialog immediately for create mode
+
+        // Show success notification
+        setNotification({
+          message: 'Group created successfully',
+          type: 'success',
+        });
+
+        // Don't call onSubmit or close the dialog yet - let the user see the success message and copy the join code
+        // The real-time subscription will handle updating the UI
       } else if (mode === 'edit' && group) {
+        // Create the updated group object
+        const updatedGroup: Group = {
+          ...group,
+          groupName,
+          groupDescription,
+        };
+
+        // Update the group in the database
         await groupService.updateGroup(group.groupId, {
           groupName,
           groupDescription,
         });
-        // For edit mode, close immediately and notify parent
-        onSubmit();
+
+        // Notify parent of the update for immediate local state update
+        onSubmit(updatedGroup);
+
+        // Show success notification
+        setNotification({
+          message: 'Group updated successfully',
+          type: 'success',
+        });
+
+        // Close the dialog
         onClose();
       }
     } catch (err) {
       console.error(`Error ${mode === 'create' ? 'creating' : 'updating'} group:`, err);
       setError(`Failed to ${mode} group. Please try again.`);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
-  };
-
-  const handleClose = () => {
-    if (mode === 'edit' && group) {
-      setGroupName(group.groupName);
-      setGroupDescription(group.groupDescription);
-    } else {
-      setGroupName('');
-      setGroupDescription('');
-    }
-    setError(null);
-    setNameError(null);
-    setDescriptionError(null);
-    setCreatedGroup(null);
-    setCopiedCode(null);
-    setNotification(null);
-    onClose();
   };
 
   const handleSuccessClose = () => {
-    onSubmit(); // Notify parent of success
-    handleClose(); // Reset state and close dialog
+    // Close the dialog and reset state
+    handleClose();
+
+    // Notify parent component that the dialog is closed
+    onClose();
   };
 
   const handleCopyJoinCode = async (joinCode: string) => {
@@ -235,7 +292,7 @@ export default function GroupFormDialog({
                 variant="outlined"
                 value={groupName}
                 onChange={handleNameChange}
-                disabled={loading}
+                disabled={isSubmitting}
                 required
                 error={!!nameError}
                 helperText={nameError || `${groupName.length}/${MAX_GROUP_NAME_LENGTH}`}
@@ -251,7 +308,7 @@ export default function GroupFormDialog({
                 rows={3}
                 value={groupDescription}
                 onChange={handleDescriptionChange}
-                disabled={loading}
+                disabled={isSubmitting}
                 error={!!descriptionError}
                 helperText={
                   descriptionError || `${groupDescription.length}/${MAX_GROUP_DESCRIPTION_LENGTH}`
@@ -267,17 +324,17 @@ export default function GroupFormDialog({
             </Button>
           ) : (
             <>
-              <Button onClick={handleClose} disabled={loading}>
+              <Button onClick={handleClose} disabled={isSubmitting}>
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
                 color="primary"
                 variant="contained"
-                disabled={loading || !!nameError || !!descriptionError}
-                startIcon={loading ? <CircularProgress size={20} /> : null}
+                disabled={isSubmitting || !!nameError || !!descriptionError}
+                startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
               >
-                {loading
+                {isSubmitting
                   ? mode === 'create'
                     ? 'Creating...'
                     : 'Updating...'

@@ -33,21 +33,40 @@ export function hydrateFallback() {
 async function groupLoader({ params }: LoaderFunctionArgs) {
   const groupId = params.groupId;
   const auth = getAuth();
-  const currentUser = auth.currentUser;
 
   // If groupId is undefined, redirect to 404
   if (!groupId) {
     return redirect('/404');
   }
 
-  // If user is not authenticated, they will be redirected by ProtectedRoute
-  if (!currentUser) {
-    return null;
+  // Wait for auth state to be initialized
+  // This is crucial for handling page refreshes
+  if (auth.currentUser === null) {
+    // Check if auth is still initializing
+    return new Promise(resolve => {
+      const unsubscribe = auth.onAuthStateChanged(user => {
+        unsubscribe(); // Stop listening after first change
+
+        if (user) {
+          // User is authenticated, proceed with group validation
+          validateGroupAndMembership(groupId, user.uid).then(resolve);
+        } else {
+          // User is not authenticated, they will be redirected by ProtectedRoute
+          resolve(null);
+        }
+      });
+    });
   }
 
+  // If we already have the current user, proceed with validation
+  return validateGroupAndMembership(groupId, auth.currentUser.uid);
+}
+
+// Helper function to validate group and membership
+async function validateGroupAndMembership(groupId: string, userId: string) {
   try {
     // First check if the group exists
-    const group = await groupService.getGroupById(groupId, currentUser.uid);
+    const group = await groupService.getGroupById(groupId, userId);
 
     if (!group) {
       // Group not found, redirect to 404
@@ -57,7 +76,7 @@ async function groupLoader({ params }: LoaderFunctionArgs) {
     // Then check if the user is a member of the group and get full group data
     try {
       // This will throw an error if the user is not a member
-      const groupDetailData = await groupService.getGroupDetailData(groupId, currentUser.uid);
+      const groupDetailData = await groupService.getGroupDetailData(groupId, userId);
 
       // If we get here, the user is a member of the group
       return {
@@ -69,7 +88,7 @@ async function groupLoader({ params }: LoaderFunctionArgs) {
     } catch (error) {
       // User is not a member of the group, redirect to dashboard
       console.warn(
-        `User ${currentUser.uid} attempted to access group ${groupId} but is not a member: ${
+        `User ${userId} attempted to access group ${groupId} but is not a member: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

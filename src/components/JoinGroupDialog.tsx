@@ -76,6 +76,9 @@ export default function JoinGroupDialog({ open, onClose, onSuccess, user }: Join
       setLoading(true);
       setError(null);
       const group = await groupService.joinGroup(code, user);
+
+      // With real-time subscriptions, we don't need to manually refresh the groups list
+      // Just notify the parent component of success and close the dialog
       onSuccess(group.groupName);
       onClose();
     } catch (err) {

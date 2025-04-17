@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useCallback } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
 import {
@@ -19,6 +19,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import GroupIcon from '@mui/icons-material/Group';
@@ -28,9 +30,11 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PeopleIcon from '@mui/icons-material/People';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import GroupFormDialog from '@/components/GroupFormDialog';
 import JoinGroupDialog from '@/components/JoinGroupDialog';
-import { groupService } from '@/services/groupService';
+import GroupMembersDialog from '@/components/GroupMembersDialog';
+import { groupService, GroupMemberRole } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -47,6 +51,8 @@ export default function Groups() {
   const auth = useContext(AuthContext);
   const navigate = useNavigate();
   const { hasPermission, getRoleColor, getRoleLabel } = useGroupPermissions();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -56,46 +62,100 @@ export default function Groups() {
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [selectedGroupForMembers, setSelectedGroupForMembers] = useState<Group | null>(null);
 
-  // Use useCallback to memoize the fetchGroups function
-  const fetchGroups = useCallback(async () => {
+  // Set up real-time subscription for user groups
+  useEffect(() => {
     if (!auth?.myUser?.userId) return;
 
-    try {
-      setLoading(true);
-      setError(null);
-      const userGroups = await groupService.getUserGroups(auth.myUser.userId);
-      setGroups(userGroups);
-      setLastFetchedUserId(auth.myUser.userId);
+    setLoading(true); // Set loading when starting subscription
+    let memberCountSubscription = () => {};
+    const memberRoleSubscriptions: (() => void)[] = [];
 
-      // Fetch member counts for all groups in a single query
-      if (userGroups.length > 0) {
-        const groupIds = userGroups.map(group => group.groupId);
-        const counts = await groupService.getGroupMemberCounts(groupIds);
-        setMemberCounts(counts);
+    console.log('Setting up user groups subscription for user:', auth.myUser.userId);
+
+    // Subscribe to user groups updates
+    const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
+      console.log('Received updated groups from subscription:', updatedGroups);
+
+      // Update the groups state with the new data
+      setGroups(updatedGroups);
+
+      // Clean up previous subscriptions
+      memberCountSubscription();
+      memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
+      memberRoleSubscriptions.length = 0;
+
+      // Set up a single subscription for all group member counts
+      if (updatedGroups.length > 0) {
+        const groupIds = updatedGroups.map(group => group.groupId);
+        console.log('Setting up member count subscription for groups:', groupIds);
+
+        const countUnsubscribe = groupService.subscribeToGroupMemberCounts(groupIds, counts => {
+          console.log('Updating member counts for all groups:', counts);
+          setMemberCounts(counts);
+        });
+        memberCountSubscription = countUnsubscribe;
       } else {
+        // If there are no groups, reset the member counts
         setMemberCounts({});
       }
-    } catch (err) {
-      console.error('Error fetching groups:', err);
-      setError('Failed to load groups. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  }, [auth?.myUser?.userId]);
 
-  // Only fetch groups when the component mounts or when the user ID changes
-  useEffect(() => {
-    if (auth?.myUser?.userId && auth.myUser.userId !== lastFetchedUserId) {
-      fetchGroups();
-    }
-  }, [auth?.myUser?.userId, fetchGroups, lastFetchedUserId]);
+      // Set up subscriptions for member role updates
+      updatedGroups.forEach(group => {
+        console.log('Setting up member role subscription for group:', group.groupId);
+
+        // Subscribe to member role updates
+        const roleUnsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
+          // Find the current user's role in this group
+          const currentUserMember = members.find(m => m.userId === auth.myUser?.userId);
+          if (currentUserMember) {
+            console.log(
+              'Updating user role for group:',
+              group.groupId,
+              'to:',
+              currentUserMember.role
+            );
+
+            // Update the group with the new role
+            setGroups(prevGroups =>
+              prevGroups.map(g =>
+                g.groupId === group.groupId ? { ...g, userRole: currentUserMember.role } : g
+              )
+            );
+          }
+        });
+        memberRoleSubscriptions.push(roleUnsubscribe);
+      });
+
+      // Clean up member counts for groups that are no longer in the list
+      setMemberCounts(prevCounts => {
+        const newCounts = { ...prevCounts };
+        Object.keys(newCounts).forEach(groupId => {
+          if (!updatedGroups.some(group => group.groupId === groupId)) {
+            delete newCounts[groupId];
+          }
+        });
+        return newCounts;
+      });
+
+      setLoading(false); // Clear loading when groups are received
+    });
+
+    // Clean up all subscriptions when component unmounts
+    return () => {
+      console.log('Cleaning up all subscriptions');
+      unsubscribe();
+      memberCountSubscription();
+      memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
+      setLoading(false); // Ensure loading is cleared on unmount
+    };
+  }, [auth?.myUser?.userId]);
 
   const handleOpenCreateDialog = () => {
     setDialogMode('create');
@@ -115,15 +175,16 @@ export default function Groups() {
   };
 
   const handleGroupCreated = () => {
-    // Clear the cache for the current user before fetching
-    if (auth?.myUser?.userId) {
-      groupService.clearUserGroupsCache(auth.myUser.userId);
-    }
-    fetchGroups();
+    // The real-time subscription will handle updating the groups list
+    // We just need to show a success notification
     setNotification({
-      message: 'Group created successfully',
+      message:
+        dialogMode === 'create' ? 'Group created successfully' : 'Group updated successfully',
       type: 'success',
     });
+
+    // Close the dialog
+    handleDialogClose();
   };
 
   const handleCopyJoinCode = async (joinCode: string) => {
@@ -169,15 +230,11 @@ export default function Groups() {
   };
 
   const handleJoinSuccess = (groupName: string) => {
-    // Clear the cache for the current user before fetching
-    if (auth?.myUser?.userId) {
-      groupService.clearUserGroupsCache(auth.myUser.userId);
-    }
-    fetchGroups();
     setNotification({
-      message: `Successfully joined ${groupName}`,
+      message: `Successfully joined ${groupName}!`,
       type: 'success',
     });
+    // No need to manually refresh groups as the subscription will handle updates
   };
 
   const handleCloseNotification = () => {
@@ -203,24 +260,36 @@ export default function Groups() {
   const handleDeleteGroup = async () => {
     if (!selectedGroup || !auth?.myUser?.userId) return;
 
+    // Ensure only admins can delete groups
+    if (selectedGroup.userRole !== GroupMemberRole.ADMIN) {
+      setNotification({
+        message: 'Only the group admin (creator) can delete the group',
+        type: 'error',
+      });
+      handleCloseDeleteDialog();
+      return;
+    }
+
     try {
       setIsDeleting(true);
-      await groupService.deleteGroup(selectedGroup.groupId, auth.myUser.userId);
 
-      // Clear the cache for the current user before fetching
-      if (auth?.myUser?.userId) {
-        groupService.clearUserGroupsCache(auth.myUser.userId);
-      }
+      // Store the group ID and name before deletion for cleanup
+      const groupIdToDelete = selectedGroup.groupId;
+      const groupNameToDelete = selectedGroup.groupName;
 
-      // Refresh the groups list
-      fetchGroups();
+      // Close the dialog immediately to prevent UI from freezing
+      handleCloseDeleteDialog();
 
+      // Delete the group
+      await groupService.deleteGroup(groupIdToDelete, auth.myUser.userId);
+
+      // Show success notification
       setNotification({
-        message: `Group "${selectedGroup.groupName}" deleted successfully`,
+        message: `Group "${groupNameToDelete}" deleted successfully`,
         type: 'success',
       });
 
-      handleCloseDeleteDialog();
+      // No need to manually update the groups list - the subscription will handle it
     } catch (err) {
       console.error('Error deleting group:', err);
       setNotification({
@@ -234,8 +303,23 @@ export default function Groups() {
     }
   };
 
+  const handleOpenMembersDialog = (group: Group) => {
+    setSelectedGroupForMembers(group);
+    setIsMembersDialogOpen(true);
+  };
+
+  const handleCloseMembersDialog = () => {
+    setIsMembersDialogOpen(false);
+    setSelectedGroupForMembers(null);
+  };
+
   const renderGroupCard = (group: Group) => {
     const isDeletingThisGroup = deletingGroupId === group.groupId;
+    const isAdmin = group.userRole === GroupMemberRole.ADMIN;
+    const isModerator = group.userRole === GroupMemberRole.MODERATOR;
+    const canEdit = isAdmin || isModerator;
+    const canDelete = isAdmin;
+    const memberCount = memberCounts[group.groupId] || 0;
 
     return (
       <Card
@@ -254,16 +338,25 @@ export default function Groups() {
         }}
         onClick={() => !isDeletingThisGroup && handleNavigateToGroupDetail(group.groupId)}
       >
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <GroupIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6" component="h3" sx={{ flexGrow: 1 }}>
+        <CardContent sx={{ flexGrow: 1, p: { xs: 2, sm: 3 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 1.5, sm: 2 } }}>
+            <GroupIcon
+              sx={{ mr: 1, color: 'primary.main', fontSize: { xs: '1.2rem', sm: '1.5rem' } }}
+            />
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{
+                flexGrow: 1,
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+              }}
+            >
               {group.groupName}
               {isDeletingThisGroup && (
                 <CircularProgress size={16} sx={{ ml: 1, display: 'inline-block' }} />
               )}
             </Typography>
-            {hasPermission(group, GroupPermission.EDIT_GROUP) && !isDeletingThisGroup && (
+            {canEdit && !isDeletingThisGroup && (
               <Tooltip title="Edit Group">
                 <IconButton
                   size="small"
@@ -277,7 +370,7 @@ export default function Groups() {
                 </IconButton>
               </Tooltip>
             )}
-            {hasPermission(group, GroupPermission.DELETE_GROUP) && !isDeletingThisGroup && (
+            {canDelete && !isDeletingThisGroup && (
               <Tooltip title="Delete Group">
                 <IconButton
                   size="small"
@@ -293,8 +386,12 @@ export default function Groups() {
               </Tooltip>
             )}
           </Box>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">
+          <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+            >
               {truncateDescription(group.groupDescription, group.groupId)}
             </Typography>
             {group.groupDescription.length > DESCRIPTION_MAX_LENGTH && (
@@ -304,7 +401,12 @@ export default function Groups() {
                   e.stopPropagation(); // Prevent card click when clicking show more/less
                   toggleDescription(group.groupId);
                 }}
-                sx={{ mt: 0.5, p: 0, minWidth: 'auto' }}
+                sx={{
+                  mt: 0.5,
+                  p: 0,
+                  minWidth: 'auto',
+                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                }}
                 endIcon={
                   expandedDescriptions[group.groupId] ? <ExpandLessIcon /> : <ExpandMoreIcon />
                 }
@@ -313,16 +415,23 @@ export default function Groups() {
               </Button>
             )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
             <PeopleIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-            <Typography variant="body2" color="text.secondary">
-              {memberCounts[group.groupId] || 0}{' '}
-              {memberCounts[group.groupId] === 1 ? 'member' : 'members'}
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+            >
+              {memberCount > 0 ? memberCount : '...'} {memberCount === 1 ? 'member' : 'members'}
             </Typography>
             <Chip
               size="small"
               label={getRoleLabel(group.userRole)}
-              sx={{ ml: 1 }}
+              sx={{
+                ml: 1,
+                height: { xs: 20, sm: 24 },
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+              }}
               color={getRoleColor(group.userRole)}
             />
           </Box>
@@ -330,23 +439,40 @@ export default function Groups() {
             label={`Join Code: ${group.joinCode}`}
             size="small"
             variant="outlined"
-            sx={{ mt: 1 }}
+            sx={{
+              mt: 1,
+              height: { xs: 24, sm: 28 },
+              fontSize: { xs: '0.7rem', sm: '0.75rem' },
+            }}
             onClick={e => {
               e.stopPropagation(); // Prevent card click when clicking join code
               handleCopyJoinCode(group.joinCode);
             }}
-            icon={<ContentCopyIcon />}
+            icon={<ContentCopyIcon fontSize="small" />}
             color={copiedCode === group.joinCode ? 'success' : 'default'}
           />
         </CardContent>
-        <CardActions>
+        <CardActions sx={{ p: { xs: 1, sm: 2 }, pt: 0 }}>
           {hasPermission(group, GroupPermission.MANAGE_MEMBERS) && !isDeletingThisGroup ? (
             <Button
               size="small"
               color="primary"
+              variant="outlined"
+              startIcon={<ManageAccountsIcon />}
               onClick={e => {
                 e.stopPropagation(); // Prevent card click when clicking manage members
-                // This will be implemented in the future
+                handleOpenMembersDialog(group);
+              }}
+              sx={{
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 500,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                '&:hover': {
+                  backgroundColor: 'rgba(143, 197, 163, 0.08)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                },
               }}
             >
               Manage Members
@@ -369,26 +495,47 @@ export default function Groups() {
     );
   }
 
-  if (error) {
+  if (notification && notification.type === 'error') {
     return (
       <Box sx={{ mt: 2 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error">{notification.message}</Alert>
       </Box>
     );
   }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          mb: 3,
+          gap: { xs: 2, sm: 0 },
+        }}
+      >
         <Typography variant="h5" component="h2">
           My Groups
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            width: { xs: '100%', sm: 'auto' },
+            justifyContent: { xs: 'space-between', sm: 'flex-end' },
+          }}
+        >
           <Button
             variant="outlined"
             color="primary"
             startIcon={<PeopleIcon />}
             onClick={handleOpenJoinDialog}
+            fullWidth={false}
+            sx={{
+              minWidth: { xs: '48%', sm: 'auto' },
+              whiteSpace: 'nowrap',
+            }}
           >
             Join Group
           </Button>
@@ -397,6 +544,11 @@ export default function Groups() {
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenCreateDialog}
+            fullWidth={false}
+            sx={{
+              minWidth: { xs: '48%', sm: 'auto' },
+              whiteSpace: 'nowrap',
+            }}
           >
             Create Group
           </Button>
@@ -404,8 +556,8 @@ export default function Groups() {
       </Box>
 
       {groups.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
-          <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+        <Card sx={{ p: { xs: 2, sm: 4 }, textAlign: 'center' }}>
+          <GroupIcon sx={{ fontSize: { xs: 36, sm: 48 }, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
             You haven't joined any groups yet
           </Typography>
@@ -426,7 +578,7 @@ export default function Groups() {
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
-            gap: 3,
+            gap: { xs: 2, sm: 3 },
           }}
         >
           {groups.map(renderGroupCard)}
@@ -449,12 +601,22 @@ export default function Groups() {
         user={auth.myUser}
       />
 
+      {selectedGroupForMembers && (
+        <GroupMembersDialog
+          open={isMembersDialogOpen}
+          onClose={handleCloseMembersDialog}
+          group={selectedGroupForMembers}
+          user={auth.myUser}
+        />
+      )}
+
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={isDeleteDialogOpen}
         onClose={isDeleting ? undefined : handleCloseDeleteDialog}
         aria-labelledby="delete-dialog-title"
         aria-describedby="delete-dialog-description"
+        fullScreen={isMobile}
       >
         <DialogTitle id="delete-dialog-title" sx={{ display: 'flex', alignItems: 'center' }}>
           {isDeleting && <CircularProgress size={20} sx={{ mr: 1 }} />}
@@ -466,7 +628,7 @@ export default function Groups() {
             cannot be undone.
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: { xs: 2, sm: 3 } }}>
           <Button onClick={handleCloseDeleteDialog} disabled={isDeleting}>
             Cancel
           </Button>

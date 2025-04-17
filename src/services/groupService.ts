@@ -7,14 +7,17 @@ import {
   where,
   getDocs,
   Timestamp,
-  deleteDoc,
   updateDoc,
   writeBatch,
+  onSnapshot,
+  Unsubscribe,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
+import { ratingService } from '@/services/ratingService';
 
 export enum GroupMemberRole {
   MEMBER = 'member',
@@ -31,7 +34,6 @@ interface GroupService {
   addMemberToGroup(groupId: string, user: MyUser, role?: GroupMemberRole): Promise<void>;
   removeMemberFromGroup(groupId: string, userId: string): Promise<void>;
   updateMemberRole(groupId: string, userId: string, role: GroupMemberRole): Promise<void>;
-  clearUserGroupsCache(userId?: string): void;
   getGroupMemberCount(groupId: string): Promise<number>;
   getGroupMemberCounts(groupIds: string[]): Promise<Record<string, number>>;
   getGroupMembers(groupId: string): Promise<GroupMember[]>;
@@ -47,158 +49,204 @@ interface GroupService {
     members: GroupMember[];
     userRole: GroupMemberRole;
   }>;
+  subscribeToGroup(groupId: string, callback: (group: Group | null) => void): Unsubscribe;
+  subscribeToGroupMembers(groupId: string, callback: (members: GroupMember[]) => void): Unsubscribe;
+  subscribeToGroupMemberCounts(
+    groupIds: string[],
+    callback: (counts: Record<string, number>) => void
+  ): Unsubscribe;
+  subscribeToUserGroups(userId: string, callback: (groups: Group[]) => void): Unsubscribe;
+  isSubscriptionActive(type: string, id: string): boolean;
+  unsubscribeAll(): void;
 }
 
 class FirestoreGroupService implements GroupService {
   private groupsCollection = collection(db, 'groups');
   private membersCollection = collection(db, 'groupMembers');
-  private userGroupsCache: Record<string, { groups: Group[]; timestamp: number }> = {};
-  private cacheExpiryTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+  private activeSubscriptions: Record<string, Unsubscribe> = {};
+
+  private generateSubscriptionId(type: string, id: string): string {
+    return `${type}_${id}`;
+  }
+
+  private unsubscribe(subscriptionId: string): void {
+    if (this.activeSubscriptions[subscriptionId]) {
+      console.log(`Unsubscribing from ${subscriptionId}`);
+      this.activeSubscriptions[subscriptionId]();
+      delete this.activeSubscriptions[subscriptionId];
+    }
+  }
+
+  public unsubscribeAll(): void {
+    const count = Object.keys(this.activeSubscriptions).length;
+    if (count > 0) {
+      console.log(`Unsubscribing from ${count} active subscriptions`);
+      Object.keys(this.activeSubscriptions).forEach(id => {
+        this.unsubscribe(id);
+      });
+    }
+  }
+
+  public isSubscriptionActive(type: string, id: string): boolean {
+    const subscriptionId = this.generateSubscriptionId(type, id);
+    return !!this.activeSubscriptions[subscriptionId];
+  }
 
   async createGroup(name: string, description: string, user: MyUser): Promise<Group> {
-    const joinCode = await this.generateUniqueJoinCode();
-    const groupRef = doc(this.groupsCollection);
-    const groupId = groupRef.id;
+    try {
+      const joinCode = await this.generateUniqueJoinCode();
+      const groupRef = doc(this.groupsCollection);
+      const groupId = groupRef.id;
 
-    const group: Group = {
-      groupId,
-      groupName: name,
-      groupDescription: description,
-      createdBy: user.userId,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-      joinCode,
-    };
+      const group: Group = {
+        groupId,
+        groupName: name,
+        groupDescription: description,
+        createdBy: user.userId,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        joinCode,
+      };
 
-    await setDoc(groupRef, group);
+      await setDoc(groupRef, group);
 
-    // Add creator as admin member
-    const memberDocId = `${groupId}_${user.userId}`; // Composite key for uniqueness
-    const member: GroupMember = {
-      groupId,
-      userId: user.userId,
-      email: user.email,
-      displayName: user.displayName,
-      role: GroupMemberRole.ADMIN,
-      joinedAt: Timestamp.now(),
-      photoURL: user.photoURL,
-    };
+      const memberDocId = `${groupId}_${user.userId}`;
+      const member: GroupMember = {
+        groupId,
+        userId: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+        role: GroupMemberRole.ADMIN,
+        joinedAt: Timestamp.now(),
+        photoURL: user.photoURL,
+      };
 
-    await setDoc(doc(this.membersCollection, memberDocId), member);
+      await setDoc(doc(this.membersCollection, memberDocId), member);
 
-    // Clear the cache for the user who created the group
-    this.clearUserGroupsCache(user.userId);
-
-    // Return the group with the user role
-    return {
-      ...group,
-      userRole: GroupMemberRole.ADMIN,
-    };
+      return {
+        ...group,
+        userRole: GroupMemberRole.ADMIN,
+      };
+    } catch (error) {
+      console.error('Error creating group:', error);
+      throw error;
+    }
   }
 
   async isJoinCodeUnique(joinCode: string): Promise<boolean> {
-    const q = query(this.groupsCollection, where('joinCode', '==', joinCode));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.empty;
+    try {
+      const q = query(this.groupsCollection, where('joinCode', '==', joinCode));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.empty;
+    } catch (error) {
+      console.error('Error checking join code uniqueness:', error);
+      throw error;
+    }
   }
 
   async generateUniqueJoinCode(): Promise<string> {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let joinCode: string;
-    let isUnique = false;
+    try {
+      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let joinCode: string;
+      let isUnique = false;
 
-    while (!isUnique) {
-      joinCode = Array.from({ length: 6 }, () =>
-        characters.charAt(Math.floor(Math.random() * characters.length))
-      ).join('');
+      while (!isUnique) {
+        joinCode = Array.from({ length: 6 }, () =>
+          characters.charAt(Math.floor(Math.random() * characters.length))
+        ).join('');
 
-      isUnique = await this.isJoinCodeUnique(joinCode);
-      if (isUnique) {
-        return joinCode;
+        isUnique = await this.isJoinCodeUnique(joinCode);
+        if (isUnique) {
+          return joinCode;
+        }
       }
-    }
 
-    throw new Error('Failed to generate unique join code');
+      throw new Error('Failed to generate unique join code');
+    } catch (error) {
+      console.error('Error generating unique join code:', error);
+      throw error;
+    }
   }
 
   async getUserGroups(userId: string): Promise<Group[]> {
-    // Check if we have a valid cached result
-    const cachedData = this.userGroupsCache[userId];
-    const now = Date.now();
+    try {
+      // Get all group memberships for the user
+      const q = query(this.membersCollection, where('userId', '==', userId));
+      const memberDocs = await getDocs(q);
 
-    if (cachedData && now - cachedData.timestamp < this.cacheExpiryTime) {
-      console.log('Using cached groups for user:', userId);
-      return cachedData.groups;
-    }
+      if (memberDocs.empty) {
+        return [];
+      }
 
-    // Get all group memberships for the user
-    const q = query(this.membersCollection, where('userId', '==', userId));
-    const memberDocs = await getDocs(q);
+      // Create a map of groupId to role
+      const roleMap = new Map<string, GroupMemberRole>();
+      memberDocs.docs.forEach(doc => {
+        const data = doc.data() as GroupMember;
+        roleMap.set(data.groupId, data.role);
+      });
 
-    if (memberDocs.empty) {
-      // Cache empty result too
-      this.userGroupsCache[userId] = { groups: [], timestamp: now };
+      // Extract all group IDs
+      const groupIds = memberDocs.docs.map(doc => doc.data().groupId);
+
+      // If there are no groups, return empty array
+      if (groupIds.length === 0) {
+        return [];
+      }
+
+      // Use a single query to get all groups at once
+      const groupsQuery = query(this.groupsCollection, where('groupId', 'in', groupIds));
+      const groupDocs = await getDocs(groupsQuery);
+
+      // Map the results to Group objects and add role information
+      const groups = groupDocs.docs.map(doc => {
+        const groupData = doc.data() as Group;
+        return {
+          ...groupData,
+          userRole: roleMap.get(groupData.groupId) || GroupMemberRole.MEMBER,
+        };
+      });
+
+      return groups;
+    } catch (error) {
+      console.error('Error getting user groups:', error);
+      // Return empty array on error to prevent app crashes
       return [];
     }
-
-    // Create a map of groupId to role
-    const roleMap = new Map<string, GroupMemberRole>();
-    memberDocs.docs.forEach(doc => {
-      const data = doc.data() as GroupMember;
-      roleMap.set(data.groupId, data.role);
-    });
-
-    // Extract all group IDs
-    const groupIds = memberDocs.docs.map(doc => doc.data().groupId);
-
-    // Use a single query to get all groups at once
-    const groupsQuery = query(this.groupsCollection, where('groupId', 'in', groupIds));
-    const groupDocs = await getDocs(groupsQuery);
-
-    // Map the results to Group objects and add role information
-    const groups = groupDocs.docs.map(doc => {
-      const groupData = doc.data() as Group;
-      return {
-        ...groupData,
-        userRole: roleMap.get(groupData.groupId) || GroupMemberRole.MEMBER,
-      };
-    });
-
-    // Cache the result
-    this.userGroupsCache[userId] = { groups, timestamp: now };
-
-    return groups;
   }
 
   async getGroupById(groupId: string, userId?: string): Promise<Group | null> {
-    const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
+    try {
+      const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
 
-    if (!groupDoc.exists()) {
+      if (!groupDoc.exists()) {
+        return null;
+      }
+
+      const group = groupDoc.data() as Group;
+
+      if (userId) {
+        try {
+          const memberDocId = `${groupId}_${userId}`;
+          const memberRef = doc(db, 'groupMembers', memberDocId);
+          const memberDoc = await getDoc(memberRef);
+
+          if (memberDoc.exists()) {
+            const memberData = memberDoc.data() as GroupMember;
+            return {
+              ...group,
+              userRole: memberData.role,
+            };
+          }
+        } catch (error) {
+          console.error('Error getting user role for group:', error);
+        }
+      }
+
+      return group;
+    } catch (error) {
+      console.error('Error getting group by ID:', error);
       return null;
     }
-
-    const group = groupDoc.data() as Group;
-
-    // If userId is provided, get the user's role in this group
-    if (userId) {
-      try {
-        const memberDocId = `${groupId}_${userId}`;
-        const memberRef = doc(db, 'groupMembers', memberDocId);
-        const memberDoc = await getDoc(memberRef);
-
-        if (memberDoc.exists()) {
-          const memberData = memberDoc.data() as GroupMember;
-          return {
-            ...group,
-            userRole: memberData.role,
-          };
-        }
-      } catch (error) {
-        console.error('Error getting user role for group:', error);
-      }
-    }
-
-    return group;
   }
 
   async addMemberToGroup(
@@ -206,98 +254,152 @@ class FirestoreGroupService implements GroupService {
     user: MyUser,
     role: GroupMemberRole = GroupMemberRole.MEMBER
   ): Promise<void> {
-    const memberDocId = `${groupId}_${user.userId}`; // Composite key for uniqueness
-    const member: GroupMember = {
-      groupId,
-      userId: user.userId,
-      email: user.email,
-      displayName: user.displayName,
-      role,
-      joinedAt: Timestamp.now(),
-      photoURL: user.photoURL,
-    };
+    try {
+      // Check if the group exists first
+      const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
+      if (!groupDoc.exists()) {
+        throw new Error('Group not found');
+      }
 
-    await setDoc(doc(this.membersCollection, memberDocId), member);
+      // Check if the user is already a member
+      const memberDocId = `${groupId}_${user.userId}`;
+      const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+      if (memberDoc.exists()) {
+        throw new Error('User is already a member of this group');
+      }
+
+      // Create the member document
+      const member: GroupMember = {
+        groupId,
+        userId: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+        role,
+        joinedAt: Timestamp.now(),
+        photoURL: user.photoURL,
+      };
+
+      // Use a batch to ensure atomicity
+      const batch = writeBatch(db);
+      batch.set(doc(this.membersCollection, memberDocId), member);
+      await batch.commit();
+    } catch (error) {
+      console.error('Error adding member to group:', error);
+      throw error;
+    }
   }
 
   async removeMemberFromGroup(groupId: string, userId: string): Promise<void> {
-    const memberDocId = `${groupId}_${userId}`;
-    await deleteDoc(doc(this.membersCollection, memberDocId));
+    try {
+      // Check if the user is a member of the group
+      const memberDocId = `${groupId}_${userId}`;
+      const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+      if (!memberDoc.exists()) {
+        throw new Error('User is not a member of this group');
+      }
 
-    // Clear the cache for the user who left the group
-    this.clearUserGroupsCache(userId);
+      // Use a batch to ensure atomicity
+      const batch = writeBatch(db);
+      batch.delete(doc(this.membersCollection, memberDocId));
+      await batch.commit();
+    } catch (error) {
+      console.error('Error removing member from group:', error);
+      throw error;
+    }
   }
 
   async updateMemberRole(groupId: string, userId: string, role: GroupMemberRole): Promise<void> {
-    const memberDocId = `${groupId}_${userId}`;
-    await updateDoc(doc(this.membersCollection, memberDocId), { role });
-  }
+    try {
+      // Check if the user is a member of the group
+      const memberDocId = `${groupId}_${userId}`;
+      const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+      if (!memberDoc.exists()) {
+        throw new Error('User is not a member of this group');
+      }
 
-  // Add a method to clear the cache when needed (e.g., after creating a new group)
-  clearUserGroupsCache(userId?: string): void {
-    if (userId) {
-      delete this.userGroupsCache[userId];
-    } else {
-      this.userGroupsCache = {};
+      // Use a batch to ensure atomicity
+      const batch = writeBatch(db);
+      batch.update(doc(this.membersCollection, memberDocId), { role });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error updating member role:', error);
+      throw error;
     }
   }
 
   async getGroupMemberCount(groupId: string): Promise<number> {
-    const q = query(this.membersCollection, where('groupId', '==', groupId));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.size;
+    try {
+      const q = query(this.membersCollection, where('groupId', '==', groupId));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.size;
+    } catch (error) {
+      console.error('Error getting group member count:', error);
+      return 0;
+    }
   }
 
   async getGroupMemberCounts(groupIds: string[]): Promise<Record<string, number>> {
-    if (groupIds.length === 0) return {};
+    try {
+      if (groupIds.length === 0) return {};
 
-    // If there's only one group, use the single group method
-    if (groupIds.length === 1) {
-      const count = await this.getGroupMemberCount(groupIds[0]);
-      return { [groupIds[0]]: count };
+      if (groupIds.length === 1) {
+        const count = await this.getGroupMemberCount(groupIds[0]);
+        return { [groupIds[0]]: count };
+      }
+
+      // Initialize counts object with zeros for all group IDs
+      const counts: Record<string, number> = {};
+      groupIds.forEach(id => {
+        counts[id] = 0;
+      });
+
+      // Query for members in all groups at once
+      const q = query(this.membersCollection, where('groupId', 'in', groupIds));
+      const querySnapshot = await getDocs(q);
+
+      // Count members for each group
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const groupId = data.groupId;
+        if (groupId && groupId in counts) {
+          counts[groupId] = (counts[groupId] || 0) + 1;
+        }
+      });
+
+      return counts;
+    } catch (error) {
+      console.error('Error getting group member counts:', error);
+      return {};
     }
-
-    // For multiple groups, we need to use a more efficient approach
-    // We'll use a single query with 'in' operator to get all members for the groups
-    const q = query(this.membersCollection, where('groupId', 'in', groupIds));
-    const querySnapshot = await getDocs(q);
-
-    // Count members for each group
-    const counts: Record<string, number> = {};
-    groupIds.forEach(id => {
-      counts[id] = 0; // Initialize all groups with 0
-    });
-
-    // Count members for each group
-    querySnapshot.forEach(doc => {
-      const data = doc.data();
-      const groupId = data.groupId;
-      counts[groupId] = (counts[groupId] || 0) + 1;
-    });
-
-    return counts;
   }
 
   async getGroupMembers(groupId: string): Promise<GroupMember[]> {
-    const q = query(this.membersCollection, where('groupId', '==', groupId));
-    const querySnapshot = await getDocs(q);
+    try {
+      const q = query(this.membersCollection, where('groupId', '==', groupId));
+      const querySnapshot = await getDocs(q);
 
-    return querySnapshot.docs.map(doc => doc.data() as GroupMember);
+      return querySnapshot.docs.map(doc => doc.data() as GroupMember);
+    } catch (error) {
+      console.error('Error getting group members:', error);
+      return [];
+    }
   }
 
   async updateGroup(groupId: string, updates: Partial<Group>): Promise<void> {
-    const groupRef = doc(this.groupsCollection, groupId);
+    try {
+      const groupRef = doc(this.groupsCollection, groupId);
 
-    // Add updatedAt timestamp
-    const updatedData = {
-      ...updates,
-      updatedAt: Timestamp.now(),
-    };
+      // Add updatedAt timestamp
+      const updatedData = {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      };
 
-    await updateDoc(groupRef, updatedData);
-
-    // Clear cache for all users who might have this group
-    this.clearUserGroupsCache();
+      await updateDoc(groupRef, updatedData);
+    } catch (error) {
+      console.error('Error updating group:', error);
+      throw error;
+    }
   }
 
   async joinGroup(joinCode: string, user: MyUser): Promise<Group> {
@@ -341,9 +443,6 @@ class FirestoreGroupService implements GroupService {
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
 
-      // Clear the cache for this user to ensure fresh data
-      this.clearUserGroupsCache(user.userId);
-
       // Return the group with the user role
       return {
         ...groupData,
@@ -356,49 +455,84 @@ class FirestoreGroupService implements GroupService {
   }
 
   async deleteGroup(groupId: string, userId?: string): Promise<void> {
-    // If userId is provided, verify the user has permission to delete the group
-    if (userId) {
-      // Get the group to check if the user is the creator
-      const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
+    try {
+      console.log('Deleting group:', groupId);
 
-      if (!groupDoc.exists()) {
-        throw new Error('Group not found');
-      }
+      // If userId is provided, verify the user has permission to delete the group
+      if (userId) {
+        // Get the group to check if the user is the creator
+        const groupDoc = await getDoc(doc(this.groupsCollection, groupId));
 
-      const groupData = groupDoc.data() as Group;
+        if (!groupDoc.exists()) {
+          throw new Error('Group not found');
+        }
 
-      // Check if the user is the creator of the group
-      if (groupData.createdBy !== userId) {
-        // Check if the user is an admin of the group
-        const memberDocId = `${groupId}_${userId}`;
-        const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+        const groupData = groupDoc.data() as Group;
 
-        if (!memberDoc.exists() || memberDoc.data().role !== GroupMemberRole.ADMIN) {
-          throw new Error('You do not have permission to delete this group');
+        // Check if the user is the creator of the group
+        if (groupData.createdBy !== userId) {
+          // Check if the user is an admin of the group
+          const memberDocId = `${groupId}_${userId}`;
+          const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+
+          if (!memberDoc.exists() || memberDoc.data().role !== GroupMemberRole.ADMIN) {
+            throw new Error('You do not have permission to delete this group');
+          }
         }
       }
+
+      // First, delete all members to ensure proper cleanup
+      const memberQuery = query(this.membersCollection, where('groupId', '==', groupId));
+      const memberSnapshot = await getDocs(memberQuery);
+
+      // Use a batch to delete the group and all its members in a single transaction
+      const batch = writeBatch(db);
+
+      // Delete all members first
+      memberSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Delete the group document
+      batch.delete(doc(this.groupsCollection, groupId));
+
+      // Commit the batch
+      await batch.commit();
+      console.log('Group and members deleted successfully');
+
+      // Delete all ratings associated with this group
+      // This is done separately since it's in a different collection
+      await ratingService.deleteAllRatingsForGroup(groupId);
+      console.log('Ratings deleted successfully');
+
+      // Clean up all subscriptions for this group
+      const subscriptionsToClean = [
+        this.generateSubscriptionId('group', groupId),
+        this.generateSubscriptionId('members', groupId),
+        this.generateSubscriptionId('memberCounts', groupId),
+        this.generateSubscriptionId('userGroups', userId || ''),
+        this.generateSubscriptionId('groupMembers', groupId),
+      ];
+
+      // Unsubscribe from all related subscriptions
+      subscriptionsToClean.forEach(subId => {
+        this.unsubscribe(subId);
+      });
+
+      // Force a refresh of user groups subscription if userId is provided
+      if (userId) {
+        const userGroupsSubId = this.generateSubscriptionId('userGroups', userId);
+        if (this.activeSubscriptions[userGroupsSubId]) {
+          this.unsubscribe(userGroupsSubId);
+          // The subscription will be automatically recreated by the component
+        }
+      }
+
+      console.log('Subscriptions cleaned up');
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      throw error;
     }
-
-    // Use a batch to delete the group and all its members in a single transaction
-    const batch = writeBatch(db);
-
-    // Delete the group document
-    batch.delete(doc(this.groupsCollection, groupId));
-
-    // Delete all members of the group
-    const q = query(this.membersCollection, where('groupId', '==', groupId));
-    const querySnapshot = await getDocs(q);
-
-    // Add all member deletions to the batch
-    querySnapshot.docs.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-
-    // Commit the batch
-    await batch.commit();
-
-    // Clear the cache for all users since we don't know who might have this group
-    this.clearUserGroupsCache();
   }
 
   async getGroupDetailData(
@@ -440,7 +574,7 @@ class FirestoreGroupService implements GroupService {
       ]);
 
       return {
-        group: { ...group, groupId },
+        group,
         memberCount,
         members,
         userRole,
@@ -449,6 +583,263 @@ class FirestoreGroupService implements GroupService {
       console.error('Error getting group detail data:', error);
       throw error;
     }
+  }
+
+  subscribeToGroup(groupId: string, callback: (group: Group | null) => void): Unsubscribe {
+    const subscriptionId = this.generateSubscriptionId('group', groupId);
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    // Create a new subscription
+    const unsubscribe = onSnapshot(
+      doc(this.groupsCollection, groupId),
+      doc => {
+        if (doc.exists()) {
+          const group = doc.data() as Group;
+          callback({ ...group, groupId: doc.id });
+        } else {
+          callback(null);
+        }
+      },
+      error => {
+        console.error('Error subscribing to group:', error);
+        callback(null);
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
+  }
+
+  subscribeToGroupMembers(
+    groupId: string,
+    callback: (members: GroupMember[]) => void
+  ): Unsubscribe {
+    const subscriptionId = this.generateSubscriptionId('members', groupId);
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    // Create a new subscription
+    const unsubscribe = onSnapshot(
+      query(this.membersCollection, where('groupId', '==', groupId)),
+      querySnapshot => {
+        const members = querySnapshot.docs.map(doc => doc.data() as GroupMember);
+        callback(members);
+      },
+      error => {
+        console.error('Error subscribing to group members:', error);
+        callback([]);
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
+  }
+
+  /**
+   * Subscribe to member counts for multiple groups at once
+   * This is more efficient than creating individual subscriptions for each group
+   * @param groupIds Array of group IDs to subscribe to
+   * @param callback Function to call when member counts change
+   * @returns Unsubscribe function
+   */
+  subscribeToGroupMemberCounts(
+    groupIds: string[],
+    callback: (counts: Record<string, number>) => void
+  ): Unsubscribe {
+    if (groupIds.length === 0) {
+      callback({});
+      return () => {};
+    }
+
+    const subscriptionId = this.generateSubscriptionId('memberCounts', groupIds.join('_'));
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    // Initialize counts object with zeros for all group IDs
+    const counts: Record<string, number> = {};
+    groupIds.forEach(id => {
+      counts[id] = 0;
+    });
+
+    // Create a new subscription for all groups at once
+    const unsubscribe = onSnapshot(
+      query(this.membersCollection, where('groupId', 'in', groupIds)),
+      querySnapshot => {
+        // Reset counts
+        groupIds.forEach(id => {
+          counts[id] = 0;
+        });
+
+        // Count members for each group
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const groupId = data.groupId;
+          if (groupId && groupId in counts) {
+            counts[groupId] = (counts[groupId] || 0) + 1;
+          }
+        });
+
+        callback({ ...counts });
+      },
+      error => {
+        console.error('Error subscribing to group member counts:', error);
+        callback({});
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
+  }
+
+  subscribeToUserGroups(userId: string, callback: (groups: Group[]) => void): Unsubscribe {
+    const subscriptionId = this.generateSubscriptionId('userGroups', userId);
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    // Create a map to store group subscriptions
+    const groupSubscriptions: Record<string, Unsubscribe> = {};
+    let currentGroups: Group[] = [];
+
+    // First, get all group IDs the user is a member of
+    const memberQuery = query(this.membersCollection, where('userId', '==', userId));
+
+    // Create a new subscription for user's group memberships
+    const unsubscribe = onSnapshot(
+      memberQuery,
+      async memberSnapshot => {
+        console.log('Member snapshot updated:', memberSnapshot.size, 'memberships');
+
+        // Get current group IDs from the member snapshot
+        const currentGroupIds = memberSnapshot.docs.map(doc => doc.data().groupId);
+        console.log('Current group IDs:', currentGroupIds);
+
+        // Create a map of groupId to role
+        const roleMap = new Map<string, GroupMemberRole>();
+        memberSnapshot.docs.forEach(doc => {
+          const data = doc.data() as GroupMember;
+          roleMap.set(data.groupId, data.role);
+        });
+
+        if (memberSnapshot.empty) {
+          // Clean up any existing group subscriptions
+          Object.values(groupSubscriptions).forEach(unsub => unsub());
+          Object.keys(groupSubscriptions).forEach(key => delete groupSubscriptions[key]);
+          currentGroups = [];
+          callback([]);
+          return;
+        }
+
+        // Extract all group IDs
+        const groupIds = memberSnapshot.docs.map(doc => doc.data().groupId);
+        console.log('User is a member of groups:', groupIds);
+
+        // Clean up subscriptions for groups the user is no longer a member of
+        Object.keys(groupSubscriptions).forEach(groupId => {
+          if (!groupIds.includes(groupId)) {
+            console.log('Unsubscribing from group that user is no longer a member of:', groupId);
+            groupSubscriptions[groupId]();
+            delete groupSubscriptions[groupId];
+            // Remove the group from currentGroups
+            currentGroups = currentGroups.filter(g => g.groupId !== groupId);
+          }
+        });
+
+        // If there are no groups, return empty array
+        if (groupIds.length === 0) {
+          currentGroups = [];
+          callback([]);
+          return;
+        }
+
+        // Set up individual subscriptions for each group
+        const updateCallback = () => {
+          // Sort groups to maintain consistent order
+          const sortedGroups = [...currentGroups].sort((a, b) =>
+            a.groupName.localeCompare(b.groupName)
+          );
+          console.log('Updating groups list with:', sortedGroups.length, 'groups');
+          callback(sortedGroups);
+        };
+
+        // Set up subscriptions for each group
+        groupIds.forEach(groupId => {
+          // Skip if we already have a subscription for this group
+          if (groupSubscriptions[groupId]) return;
+
+          console.log('Setting up subscription for group:', groupId);
+
+          // Create a subscription for this group
+          const groupUnsubscribe = onSnapshot(
+            doc(this.groupsCollection, groupId),
+            doc => {
+              if (doc.exists()) {
+                const groupData = doc.data() as Group;
+                const group: Group = {
+                  ...groupData,
+                  groupId: doc.id,
+                  userRole: roleMap.get(doc.id) || GroupMemberRole.MEMBER,
+                };
+
+                console.log('Group updated:', group.groupName);
+
+                // Update or add the group in our array
+                const index = currentGroups.findIndex(g => g.groupId === doc.id);
+                if (index >= 0) {
+                  currentGroups[index] = group;
+                } else {
+                  currentGroups.push(group);
+                }
+
+                // Notify the callback with the updated groups
+                updateCallback();
+              } else {
+                // Group was deleted, remove it from our array
+                console.log('Group deleted:', groupId);
+                currentGroups = currentGroups.filter(g => g.groupId !== groupId);
+                updateCallback();
+
+                // Clean up the subscription
+                groupSubscriptions[groupId]();
+                delete groupSubscriptions[groupId];
+              }
+            },
+            error => {
+              console.error(`Error subscribing to group ${groupId}:`, error);
+            }
+          );
+
+          // Store the subscription
+          groupSubscriptions[groupId] = groupUnsubscribe;
+        });
+
+        // Initial update of the callback with current groups
+        updateCallback();
+      },
+      error => {
+        console.error('Error subscribing to user groups:', error);
+        callback([]);
+      }
+    );
+
+    // Store the main subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    // Return a function that cleans up all subscriptions
+    return () => {
+      unsubscribe();
+      Object.values(groupSubscriptions).forEach(unsub => unsub());
+    };
   }
 }
 
