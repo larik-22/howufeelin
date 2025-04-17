@@ -15,6 +15,8 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import dayjs from 'dayjs';
 
@@ -53,6 +55,8 @@ export default function GroupDetail() {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const { getRoleColor, getRoleLabel } = useGroupPermissions();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Get the group data from the loader
   const loaderData = useLoaderData() as LoaderData;
@@ -355,18 +359,24 @@ export default function GroupDetail() {
 
   if (loading) {
     return (
-      <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+      <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, mx: 'auto' }}>
         {/* Header Skeleton */}
         <Box
-          sx={{ display: 'flex', alignItems: 'center', mb: 3, position: 'relative', width: '100%' }}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            mb: { xs: 2, sm: 3 },
+            position: 'relative',
+            width: '100%',
+          }}
         >
-          <Skeleton variant="rectangular" width={100} height={40} sx={{ borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={80} height={40} sx={{ borderRadius: 1 }} />
           <Skeleton variant="text" width="60%" height={40} sx={{ mx: 'auto' }} />
           <Skeleton variant="circular" width={40} height={40} />
         </Box>
 
         {/* Group Details Skeleton */}
-        <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
+        <Card sx={{ mb: { xs: 2, sm: 3 }, boxShadow: 3, borderRadius: 2 }}>
           <CardContent>
             <Box
               sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}
@@ -394,14 +404,14 @@ export default function GroupDetail() {
         </Card>
 
         {/* Tabs Skeleton */}
-        <Box sx={{ display: 'flex', mb: 3 }}>
-          <Skeleton variant="rectangular" width={120} height={48} sx={{ mr: 2, borderRadius: 1 }} />
-          <Skeleton variant="rectangular" width={120} height={48} sx={{ mr: 2, borderRadius: 1 }} />
-          <Skeleton variant="rectangular" width={120} height={48} sx={{ borderRadius: 1 }} />
+        <Box sx={{ display: 'flex', mb: { xs: 2, sm: 3 }, overflowX: 'auto' }}>
+          <Skeleton variant="rectangular" width={100} height={48} sx={{ mr: 1, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={100} height={48} sx={{ mr: 1, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" width={100} height={48} sx={{ borderRadius: 1 }} />
         </Box>
 
         {/* Content Skeleton */}
-        <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
+        <Card sx={{ mb: { xs: 2, sm: 3 }, boxShadow: 3, borderRadius: 2 }}>
           <CardContent>
             <Skeleton
               variant="rectangular"
@@ -417,7 +427,7 @@ export default function GroupDetail() {
   }
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+    <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, mx: 'auto' }}>
       {group && (
         <>
           <GroupHeader
@@ -451,7 +461,20 @@ export default function GroupDetail() {
             groupMembers={groupMembers}
           />
 
-          <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 3 }}>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            sx={{
+              mb: { xs: 2, sm: 3 },
+              '& .MuiTab-root': {
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: { xs: '0.8rem', sm: '0.875rem' },
+              },
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+          >
             <Tab label="Today's Moods" />
             <Tab label="Calendar" />
             <Tab label="Members" />
@@ -533,6 +556,7 @@ export default function GroupDetail() {
         aria-labelledby="leave-group-dialog-title"
         aria-describedby="leave-group-dialog-description"
         disableEscapeKeyDown={leaveGroupLoading}
+        fullScreen={isMobile}
       >
         <DialogTitle id="leave-group-dialog-title">Leave Group</DialogTitle>
         <DialogContent>
