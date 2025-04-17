@@ -15,7 +15,7 @@ import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { BarChart } from '@mui/x-charts/BarChart';
 import dayjs, { Dayjs } from 'dayjs';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 
 interface Rating {
   userId: string;
@@ -29,6 +29,7 @@ interface MoodCalendarProps {
   onDateChange: (date: dayjs.Dayjs | null) => void;
   ratings: Rating[];
   isLoading?: boolean;
+  onDateSelected?: (date: string) => void;
 }
 
 export const MoodCalendar = ({
@@ -36,8 +37,10 @@ export const MoodCalendar = ({
   onDateChange,
   ratings,
   isLoading = false,
+  onDateSelected,
 }: MoodCalendarProps) => {
   const theme = useTheme();
+  const [selectedDateRatings, setSelectedDateRatings] = useState<Rating[]>([]);
 
   // Memoize the ratings by date to avoid recalculating on every render
   const ratingsByDate = useMemo(() => {
@@ -52,6 +55,18 @@ export const MoodCalendar = ({
 
     return map;
   }, [ratings]);
+
+  // Update selected date ratings when selectedDate changes
+  useEffect(() => {
+    const dateStr = selectedDate.format('YYYY-MM-DD');
+    const dateRatings = getRatingsForDate(dateStr);
+    setSelectedDateRatings(dateRatings);
+
+    // Notify parent component about date selection
+    if (onDateSelected) {
+      onDateSelected(dateStr);
+    }
+  }, [selectedDate, ratingsByDate, onDateSelected]);
 
   // Get ratings for a specific date
   const getRatingsForDate = (date: string) => {
@@ -81,19 +96,16 @@ export const MoodCalendar = ({
 
   // Get chart data for the selected date
   const getChartData = () => {
-    const dateStr = selectedDate.format('YYYY-MM-DD');
-    const dateRatings = getRatingsForDate(dateStr);
-
     return {
       xAxis: [
         {
-          data: dateRatings.map(r => r.username),
+          data: selectedDateRatings.map(r => r.username),
           scaleType: 'band' as const,
         },
       ],
       series: [
         {
-          data: dateRatings.map(r => r.rating),
+          data: selectedDateRatings.map(r => r.rating),
           color: theme.palette.primary.main,
         },
       ],
@@ -172,7 +184,7 @@ export const MoodCalendar = ({
   };
 
   // Memoize chart data to avoid recalculating on every render
-  const chartData = useMemo(() => getChartData(), [selectedDate, ratingsByDate]);
+  const chartData = useMemo(() => getChartData(), [selectedDateRatings]);
 
   // Render loading skeleton for the calendar
   const renderCalendarSkeleton = () => (
@@ -214,7 +226,7 @@ export const MoodCalendar = ({
         <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
           Group Mood Calendar
           <Chip
-            label={`${getRatingsForDate(selectedDate.format('YYYY-MM-DD')).length} ratings today`}
+            label={`${selectedDateRatings.length} ratings for ${selectedDate.format('MMM D')}`}
             size="small"
             color="primary"
             sx={{ ml: 2 }}
@@ -353,7 +365,7 @@ export const MoodCalendar = ({
                   Ratings for {selectedDate.format('MMMM D, YYYY')}
                 </Typography>
                 <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
-                  {getRatingsForDate(selectedDate.format('YYYY-MM-DD')).length > 0 ? (
+                  {selectedDateRatings.length > 0 ? (
                     <BarChart
                       height={300}
                       series={chartData.series}

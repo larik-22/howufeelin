@@ -27,6 +27,7 @@ import { GroupMemberRole } from '@/services/groupService';
 import { Rating } from '@/types/Rating';
 import { useGroupPermissions } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
+import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
 
 import { GroupHeader } from '@/components/group/GroupHeader';
 import { GroupDetails } from '@/components/group/GroupDetails';
@@ -174,6 +175,37 @@ export default function GroupDetail() {
     };
   }, [groupId, auth?.myUser?.userId]);
 
+  // Subscribe to ratings for the selected date in the calendar
+  useEffect(() => {
+    if (!groupId || !auth?.myUser?.userId) return;
+    if (!auth.myUser) return;
+    if (activeTab !== 1) return; // Only subscribe when calendar tab is active
+
+    const dateStr = selectedDate.format('YYYY-MM-DD');
+
+    // Subscribe to ratings for the selected date
+    const selectedDateRatingsUnsubscribe = ratingService.subscribeToRatingsForDateRange(
+      groupId,
+      dateStr,
+      dateStr,
+      (ratings: Rating[]) => {
+        // Update the calendarRatings with the selected date ratings
+        // This ensures we have the most up-to-date data for the selected date
+        setCalendarRatings(prevRatings => {
+          // Filter out any existing ratings for the selected date
+          const filteredRatings = prevRatings.filter(rating => rating.ratingDate !== dateStr);
+          // Add the new ratings for the selected date
+          return [...filteredRatings, ...ratings];
+        });
+      }
+    );
+
+    // Clean up subscription when component unmounts or selected date changes
+    return () => {
+      selectedDateRatingsUnsubscribe();
+    };
+  }, [groupId, auth?.myUser?.userId, selectedDate, activeTab]);
+
   const handleBackToDashboard = () => {
     navigate('/dashboard');
   };
@@ -246,6 +278,12 @@ export default function GroupDetail() {
     }
   };
 
+  const handleCalendarDateSelected = (dateStr: string) => {
+    // This function is called by the MoodCalendar component when a date is selected
+    // We can use this to trigger additional actions if needed
+    console.log(`Date selected in calendar: ${dateStr}`);
+  };
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
   };
@@ -296,6 +334,22 @@ export default function GroupDetail() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddTestRatingsDirectly = async () => {
+    try {
+      await addTestRatingsDirectly();
+      setNotification({
+        message: 'Test ratings added directly to the database!',
+        type: 'success',
+      });
+    } catch (error) {
+      console.error('Error adding test ratings directly:', error);
+      setNotification({
+        message: 'Failed to add test ratings directly',
+        type: 'error',
+      });
     }
   };
 
@@ -373,6 +427,19 @@ export default function GroupDetail() {
             currentUserId={auth?.myUser?.userId}
           />
 
+          {import.meta.env.DEV && (
+            <>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={handleAddTestRatingsDirectly}
+                sx={{ mb: 2 }}
+              >
+                Add Test Ratings Directly
+              </Button>
+            </>
+          )}
+
           <GroupDetails
             group={group}
             memberCount={memberCount}
@@ -414,6 +481,7 @@ export default function GroupDetail() {
               }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
+              onDateSelected={handleCalendarDateSelected}
               isLoading={loading}
             />
           )}
