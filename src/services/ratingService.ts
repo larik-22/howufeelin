@@ -11,6 +11,7 @@ import {
   updateDoc,
   orderBy,
   limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Rating, RATING_MIN, RATING_MAX, isValidRating, createRatingId } from '@/types/Rating';
@@ -61,6 +62,9 @@ export interface RatingService {
   // Delete a rating
   deleteRating(ratingId: string): Promise<void>;
 
+  // Delete all ratings for a group
+  deleteAllRatingsForGroup(groupId: string): Promise<void>;
+
   // Check if a user has already rated today
   hasUserRatedToday(groupId: string, userId: string): Promise<boolean>;
 
@@ -76,6 +80,32 @@ export interface RatingService {
 }
 
 class FirestoreRatingService implements RatingService {
+  async deleteAllRatingsForGroup(groupId: string): Promise<void> {
+    try {
+      // Query all ratings for this group
+      const q = query(collection(db, this.COLLECTION), where('groupId', '==', groupId));
+
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        return; // No ratings to delete
+      }
+
+      // Use a batch to delete all ratings in a single transaction
+      const batch = writeBatch(db);
+
+      querySnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+
+      console.log(`Deleted ${querySnapshot.size} ratings for group ${groupId}`);
+    } catch (error) {
+      console.error('Error deleting all ratings for group:', error);
+      throw new RatingError('Failed to delete all ratings for group', 'DELETE_FAILED');
+    }
+  }
   private readonly COLLECTION = 'ratings';
   private readonly MAX_RATINGS_PER_QUERY = 1000;
 
