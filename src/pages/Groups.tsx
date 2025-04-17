@@ -58,7 +58,6 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
@@ -72,7 +71,6 @@ export default function Groups() {
       setError(null);
       const userGroups = await groupService.getUserGroups(auth.myUser.userId);
       setGroups(userGroups);
-      setLastFetchedUserId(auth.myUser.userId);
 
       // Fetch member counts for all groups in a single query
       if (userGroups.length > 0) {
@@ -94,39 +92,46 @@ export default function Groups() {
   useEffect(() => {
     if (!auth?.myUser?.userId) return;
 
+    setLoading(true); // Set loading when starting subscription
+
     // Subscribe to user groups updates
     const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
       setGroups(updatedGroups);
+      setLoading(false); // Clear loading when groups are received
 
-      // Update member counts for the updated groups
-      if (updatedGroups.length > 0) {
-        const groupIds = updatedGroups.map(group => group.groupId);
-        groupService
-          .getGroupMemberCounts(groupIds)
-          .then(counts => {
-            setMemberCounts(prevCounts => ({
-              ...prevCounts,
-              ...counts,
-            }));
-          })
-          .catch(err => {
-            console.error('Error fetching member counts:', err);
-          });
-      }
+      // Set up subscriptions for each group's members
+      const memberCountSubscriptions = updatedGroups.map(group => {
+        return groupService.subscribeToGroupMembers(group.groupId, members => {
+          setMemberCounts(prevCounts => ({
+            ...prevCounts,
+            [group.groupId]: members.length,
+          }));
+        });
+      });
+
+      // Clean up subscriptions for groups that are no longer in the list
+      setMemberCounts(prevCounts => {
+        const newCounts = { ...prevCounts };
+        Object.keys(newCounts).forEach(groupId => {
+          if (!updatedGroups.some(group => group.groupId === groupId)) {
+            delete newCounts[groupId];
+          }
+        });
+        return newCounts;
+      });
+
+      // Clean up subscriptions when component unmounts or groups change
+      return () => {
+        memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
+      };
     });
 
     // Clean up subscription when component unmounts
     return () => {
       unsubscribe();
+      setLoading(false); // Ensure loading is cleared on unmount
     };
   }, [auth?.myUser?.userId]);
-
-  // Initial fetch of groups
-  useEffect(() => {
-    if (auth?.myUser?.userId && auth.myUser.userId !== lastFetchedUserId) {
-      fetchGroups();
-    }
-  }, [auth?.myUser?.userId, fetchGroups, lastFetchedUserId]);
 
   const handleOpenCreateDialog = () => {
     setDialogMode('create');
@@ -197,12 +202,11 @@ export default function Groups() {
   };
 
   const handleJoinSuccess = (groupName: string) => {
-    // No need to clear cache with real-time subscriptions
-    fetchGroups();
     setNotification({
-      message: `Successfully joined ${groupName}`,
+      message: `Successfully joined ${groupName}!`,
       type: 'success',
     });
+    // No need to manually refresh groups as the subscription will handle updates
   };
 
   const handleCloseNotification = () => {

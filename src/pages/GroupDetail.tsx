@@ -118,31 +118,60 @@ export default function GroupDetail() {
     };
   }, [groupId, auth?.myUser?.userId, navigate]);
 
+  // Set up real-time subscriptions for rating data
   useEffect(() => {
-    const fetchRatingData = async () => {
-      if (!groupId || !auth?.myUser?.userId) return;
-      if (!auth.myUser) return;
+    if (!groupId || !auth?.myUser?.userId) return;
+    if (!auth.myUser) return;
 
+    setLoading(true);
+    setError(null);
+
+    // Get today's date in YYYY-MM-DD format
+    const today = dayjs().format('YYYY-MM-DD');
+
+    // Get date range for calendar (last 30 days)
+    const thirtyDaysAgo = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
+    const todayFormatted = dayjs().format('YYYY-MM-DD');
+
+    // Subscribe to today's ratings
+    const todayRatingsUnsubscribe = ratingService.subscribeToRatingsForDateRange(
+      groupId,
+      today,
+      today,
+      (ratings: Rating[]) => {
+        setTodayRatings(ratings);
+      }
+    );
+
+    // Subscribe to calendar ratings
+    const calendarRatingsUnsubscribe = ratingService.subscribeToRatingsForDateRange(
+      groupId,
+      thirtyDaysAgo,
+      todayFormatted,
+      (ratings: Rating[]) => {
+        setCalendarRatings(ratings);
+      }
+    );
+
+    // Check if user has rated today
+    const checkUserRatedToday = async () => {
       try {
-        setLoading(true);
-        setError(null);
-
-        // Only fetch rating data, since we already have group data from the loader
-        const ratingData = await ratingService.getGroupDetailRatings(groupId, auth.myUser.userId);
-
-        // Update rating-related state
-        setHasRatedToday(ratingData.hasRatedToday);
-        setTodayRatings(ratingData.todayRatings);
-        setCalendarRatings(ratingData.calendarRatings);
+        const hasRated = await ratingService.hasUserRatedToday(groupId, auth.myUser!.userId);
+        setHasRatedToday(hasRated);
       } catch (err) {
-        console.error('Error fetching rating data:', err);
-        setError(`Failed to load rating data: ${err instanceof Error ? err.message : String(err)}`);
+        console.error('Error checking if user rated today:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRatingData();
+    checkUserRatedToday();
+
+    // Clean up subscriptions when component unmounts
+    return () => {
+      todayRatingsUnsubscribe();
+      calendarRatingsUnsubscribe();
+    };
   }, [groupId, auth?.myUser?.userId]);
 
   const handleBackToDashboard = () => {
@@ -228,11 +257,9 @@ export default function GroupDetail() {
       setLoading(true);
 
       // Create the rating
-      const newRating = await ratingService.createRating(groupId, auth.myUser.userId, rating, note);
+      await ratingService.createRating(groupId, auth.myUser.userId, rating, note);
 
-      // Update the UI - add to both today's ratings and calendar ratings
-      setTodayRatings(prev => [newRating, ...prev]);
-      setCalendarRatings(prev => [newRating, ...prev]);
+      // No need to manually update the state - the subscription will handle it
       setHasRatedToday(true);
 
       setNotification({

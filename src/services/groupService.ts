@@ -10,11 +10,8 @@ import {
   updateDoc,
   writeBatch,
   onSnapshot,
-  DocumentData,
-  QuerySnapshot,
   Unsubscribe,
   serverTimestamp,
-  DocumentReference,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Group } from '@/types/Group';
@@ -63,26 +60,6 @@ class FirestoreGroupService implements GroupService {
   private groupsCollection = collection(db, 'groups');
   private membersCollection = collection(db, 'groupMembers');
   private activeSubscriptions: Record<string, Unsubscribe> = {};
-
-  private async getDocWithCache<T>(
-    docRef: DocumentReference,
-    transform: (data: DocumentData, id: string) => T
-  ): Promise<T | null> {
-    const docSnap = await getDoc(docRef);
-
-    if (!docSnap.exists()) {
-      return null;
-    }
-
-    return transform(docSnap.data() as DocumentData, docSnap.id);
-  }
-
-  private async getDocsWithCache<T>(
-    querySnapshot: QuerySnapshot,
-    transform: (data: DocumentData, id: string) => T
-  ): Promise<T[]> {
-    return querySnapshot.docs.map(doc => transform(doc.data(), doc.id));
-  }
 
   private generateSubscriptionId(type: string, id: string): string {
     return `${type}_${id}`;
