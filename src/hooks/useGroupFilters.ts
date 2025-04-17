@@ -104,6 +104,7 @@ export function useGroupFilters({
   };
 
   const handleFilterTabChange = (event: React.SyntheticEvent, newValue: FilterTab) => {
+    console.log('handleFilterTabChange', event, newValue);
     setActiveFilterTab(newValue);
   };
 
