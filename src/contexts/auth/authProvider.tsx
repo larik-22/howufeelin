@@ -13,7 +13,7 @@ import {
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '@/firebase';
 import AuthContext from './authContext';
-import { AuthContextType } from '@/types/Auth';
+import { AuthContextType } from '@/types/MyAuth';
 import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
 import { userService } from '@/services/userService';
