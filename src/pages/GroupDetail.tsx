@@ -9,14 +9,7 @@ import {
   Skeleton,
   Card,
   CardContent,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
-  CircularProgress,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import dayjs from 'dayjs';
 
@@ -30,6 +23,7 @@ import { Rating } from '@/types/Rating';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
 import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
+import { useLeaveGroup } from '@/hooks/useLeaveGroup';
 
 import { GroupHeader } from '@/components/group/GroupHeader';
 import { GroupDetails } from '@/components/group/GroupDetails';
@@ -39,6 +33,7 @@ import { GroupMembers } from '@/components/group/GroupMembers';
 import { RatingList } from '@/components/mood/RatingList';
 import GroupMembersDialog from '@/components/GroupMembersDialog';
 import GroupFormDialog from '@/components/GroupFormDialog';
+import LeaveGroupDialog from '@/components/LeaveGroupDialog';
 
 interface Notification {
   message: string;
@@ -57,8 +52,6 @@ export default function GroupDetail() {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const { getRoleColor, getRoleLabel, hasPermission } = useGroupPermissions();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Get the group data from the loader
   const loaderData = useLoaderData() as LoaderData;
@@ -85,13 +78,38 @@ export default function GroupDetail() {
   const [todayRatings, setTodayRatings] = useState<Rating[]>([]);
   const [calendarRatings, setCalendarRatings] = useState<Rating[]>([]);
 
-  // New states for leave group confirmation modal
-  const [leaveGroupModalOpen, setLeaveGroupModalOpen] = useState<boolean>(false);
-  const [leaveGroupLoading, setLeaveGroupLoading] = useState<boolean>(false);
-
   // New state for Group Members Dialog
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  // Use our custom hook for leave group functionality
+  const {
+    leaveGroupModalOpen,
+    handleLeaveGroupClick,
+    handleCloseLeaveGroupModal,
+    selectedGroup: groupToLeave,
+  } = useLeaveGroup(
+    auth?.myUser?.userId,
+    () => {
+      // Success callback
+      setNotification({
+        message: 'You have left the group',
+        type: 'success',
+      });
+
+      // Navigate to dashboard after a short delay
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+    },
+    message => {
+      // Error callback
+      setNotification({
+        message,
+        type: 'error',
+      });
+    }
+  );
 
   // Set up real-time subscriptions for group data
   useEffect(() => {
@@ -248,48 +266,6 @@ export default function GroupDetail() {
 
   const handleCloseNotification = () => {
     setNotification(null);
-  };
-
-  // Show the leave group confirmation modal
-  const handleLeaveGroupClick = () => {
-    setLeaveGroupModalOpen(true);
-  };
-
-  // Close the leave group confirmation modal
-  const handleCloseLeaveGroupModal = () => {
-    setLeaveGroupModalOpen(false);
-  };
-
-  // Handle the actual leaving process
-  const handleLeaveGroup = async () => {
-    if (!groupId || !auth?.myUser?.userId) return;
-
-    try {
-      setLeaveGroupLoading(true);
-      await groupService.removeMemberFromGroup(groupId, auth.myUser.userId);
-
-      // Close the modal
-      setLeaveGroupModalOpen(false);
-
-      // Show success notification
-      setNotification({
-        message: 'You have left the group',
-        type: 'success',
-      });
-
-      // Navigate to dashboard after a short delay
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1000);
-    } catch (error) {
-      console.error('Error leaving group:', error);
-      setNotification({
-        message: 'Failed to leave the group',
-        type: 'error',
-      });
-    } finally {
-      setLeaveGroupLoading(false);
-    }
   };
 
   const handleDateChange = (date: dayjs.Dayjs | null) => {
@@ -491,7 +467,7 @@ export default function GroupDetail() {
           <GroupHeader
             group={group}
             onBack={handleBackToDashboard}
-            onLeave={handleLeaveGroupClick}
+            onLeave={() => handleLeaveGroupClick(group)}
             currentUserId={auth?.myUser?.userId}
           />
 
@@ -613,40 +589,25 @@ export default function GroupDetail() {
         </Alert>
       </Snackbar>
 
-      {/* Leave Group Confirmation Modal */}
-      <Dialog
-        open={leaveGroupModalOpen}
-        onClose={!leaveGroupLoading ? handleCloseLeaveGroupModal : undefined}
-        aria-labelledby="leave-group-dialog-title"
-        aria-describedby="leave-group-dialog-description"
-        disableEscapeKeyDown={leaveGroupLoading}
-        fullScreen={isMobile}
-      >
-        <DialogTitle id="leave-group-dialog-title">Leave Group</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            {leaveGroupLoading ? <CircularProgress size={24} sx={{ mr: 2 }} /> : null}
-            <Box>
-              Are you sure you want to leave "{group?.groupName}"? You will need to be invited again
-              to rejoin.
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseLeaveGroupModal} disabled={leaveGroupLoading} color="primary">
-            Cancel
-          </Button>
-          <Button
-            onClick={handleLeaveGroup}
-            color="error"
-            variant="contained"
-            disabled={leaveGroupLoading}
-            startIcon={leaveGroupLoading ? <CircularProgress size={20} color="inherit" /> : null}
-          >
-            {leaveGroupLoading ? 'Leaving...' : 'Leave Group'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Leave Group Dialog */}
+      {groupToLeave && auth?.myUser && (
+        <LeaveGroupDialog
+          open={leaveGroupModalOpen}
+          onClose={handleCloseLeaveGroupModal}
+          group={groupToLeave}
+          userId={auth.myUser.userId}
+          onSuccess={() => {
+            // Navigate to dashboard immediately after successful leave
+            navigate('/dashboard');
+          }}
+          onError={message => {
+            setNotification({
+              message,
+              type: 'error',
+            });
+          }}
+        />
+      )}
 
       {/* Group Members Dialog */}
       {group && auth?.myUser && (
