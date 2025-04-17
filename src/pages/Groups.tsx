@@ -32,7 +32,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import GroupFormDialog from '@/components/GroupFormDialog';
 import JoinGroupDialog from '@/components/JoinGroupDialog';
-import { groupService } from '@/services/groupService';
+import GroupMembersDialog from '@/components/GroupMembersDialog';
+import { groupService, GroupMemberRole } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -65,6 +66,8 @@ export default function Groups() {
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [selectedGroupForMembers, setSelectedGroupForMembers] = useState<Group | null>(null);
 
   // Use useCallback to memoize the fetchGroups function
   const fetchGroups = useCallback(async () => {
@@ -236,13 +239,19 @@ export default function Groups() {
   const handleDeleteGroup = async () => {
     if (!selectedGroup || !auth?.myUser?.userId) return;
 
+    // Ensure only admins can delete groups
+    if (selectedGroup.userRole !== GroupMemberRole.ADMIN) {
+      setNotification({
+        message: 'Only the group admin (creator) can delete the group',
+        type: 'error',
+      });
+      handleCloseDeleteDialog();
+      return;
+    }
+
     try {
       setIsDeleting(true);
       await groupService.deleteGroup(selectedGroup.groupId, auth.myUser.userId);
-
-      // No need to clear cache with real-time subscriptions
-      // Refresh the groups list
-      fetchGroups();
 
       setNotification({
         message: `Group "${selectedGroup.groupName}" deleted successfully`,
@@ -263,8 +272,22 @@ export default function Groups() {
     }
   };
 
+  const handleOpenMembersDialog = (group: Group) => {
+    setSelectedGroupForMembers(group);
+    setIsMembersDialogOpen(true);
+  };
+
+  const handleCloseMembersDialog = () => {
+    setIsMembersDialogOpen(false);
+    setSelectedGroupForMembers(null);
+  };
+
   const renderGroupCard = (group: Group) => {
     const isDeletingThisGroup = deletingGroupId === group.groupId;
+    const isAdmin = group.userRole === GroupMemberRole.ADMIN;
+    const isModerator = group.userRole === GroupMemberRole.MODERATOR;
+    const canEdit = isAdmin || isModerator;
+    const canDelete = isAdmin;
 
     return (
       <Card
@@ -301,7 +324,7 @@ export default function Groups() {
                 <CircularProgress size={16} sx={{ ml: 1, display: 'inline-block' }} />
               )}
             </Typography>
-            {hasPermission(group, GroupPermission.EDIT_GROUP) && !isDeletingThisGroup && (
+            {canEdit && !isDeletingThisGroup && (
               <Tooltip title="Edit Group">
                 <IconButton
                   size="small"
@@ -315,7 +338,7 @@ export default function Groups() {
                 </IconButton>
               </Tooltip>
             )}
-            {hasPermission(group, GroupPermission.DELETE_GROUP) && !isDeletingThisGroup && (
+            {canDelete && !isDeletingThisGroup && (
               <Tooltip title="Delete Group">
                 <IconButton
                   size="small"
@@ -405,7 +428,7 @@ export default function Groups() {
               color="primary"
               onClick={e => {
                 e.stopPropagation(); // Prevent card click when clicking manage members
-                // This will be implemented in the future
+                handleOpenMembersDialog(group);
               }}
               sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
             >
@@ -534,6 +557,15 @@ export default function Groups() {
         onSuccess={handleJoinSuccess}
         user={auth.myUser}
       />
+
+      {selectedGroupForMembers && (
+        <GroupMembersDialog
+          open={isMembersDialogOpen}
+          onClose={handleCloseMembersDialog}
+          group={selectedGroupForMembers}
+          user={auth.myUser}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog
