@@ -31,5 +31,14 @@ export default defineConfig({
         drop_debugger: true,
       },
     },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router', '@mui/material'],
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/database'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
   },
 });
