@@ -90,7 +90,38 @@ export default function Groups() {
     }
   }, [auth?.myUser?.userId]);
 
-  // Only fetch groups when the component mounts or when the user ID changes
+  // Set up real-time subscription for user groups
+  useEffect(() => {
+    if (!auth?.myUser?.userId) return;
+
+    // Subscribe to user groups updates
+    const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
+      setGroups(updatedGroups);
+
+      // Update member counts for the updated groups
+      if (updatedGroups.length > 0) {
+        const groupIds = updatedGroups.map(group => group.groupId);
+        groupService
+          .getGroupMemberCounts(groupIds)
+          .then(counts => {
+            setMemberCounts(prevCounts => ({
+              ...prevCounts,
+              ...counts,
+            }));
+          })
+          .catch(err => {
+            console.error('Error fetching member counts:', err);
+          });
+      }
+    });
+
+    // Clean up subscription when component unmounts
+    return () => {
+      unsubscribe();
+    };
+  }, [auth?.myUser?.userId]);
+
+  // Initial fetch of groups
   useEffect(() => {
     if (auth?.myUser?.userId && auth.myUser.userId !== lastFetchedUserId) {
       fetchGroups();
@@ -115,10 +146,7 @@ export default function Groups() {
   };
 
   const handleGroupCreated = () => {
-    // Clear the cache for the current user before fetching
-    if (auth?.myUser?.userId) {
-      groupService.clearUserGroupsCache(auth.myUser.userId);
-    }
+    // No need to clear cache with real-time subscriptions
     fetchGroups();
     setNotification({
       message: 'Group created successfully',
@@ -169,10 +197,7 @@ export default function Groups() {
   };
 
   const handleJoinSuccess = (groupName: string) => {
-    // Clear the cache for the current user before fetching
-    if (auth?.myUser?.userId) {
-      groupService.clearUserGroupsCache(auth.myUser.userId);
-    }
+    // No need to clear cache with real-time subscriptions
     fetchGroups();
     setNotification({
       message: `Successfully joined ${groupName}`,
@@ -207,11 +232,7 @@ export default function Groups() {
       setIsDeleting(true);
       await groupService.deleteGroup(selectedGroup.groupId, auth.myUser.userId);
 
-      // Clear the cache for the current user before fetching
-      if (auth?.myUser?.userId) {
-        groupService.clearUserGroupsCache(auth.myUser.userId);
-      }
-
+      // No need to clear cache with real-time subscriptions
       // Refresh the groups list
       fetchGroups();
 

@@ -63,11 +63,11 @@ export default function GroupDetail() {
   } = loaderData;
 
   // Initialize state with loader data
-  const [group] = useState<Group | null>(
+  const [group, setGroup] = useState<Group | null>(
     loaderGroup ? { ...loaderGroup, userRole: loaderUserRole } : null
   );
-  const [memberCount] = useState<number>(loaderMemberCount || 0);
-  const [groupMembers] = useState<GroupMember[]>(loaderMembers || []);
+  const [memberCount, setMemberCount] = useState<number>(loaderMemberCount || 0);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>(loaderMembers || []);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -81,6 +81,42 @@ export default function GroupDetail() {
   // New states for leave group confirmation modal
   const [leaveGroupModalOpen, setLeaveGroupModalOpen] = useState<boolean>(false);
   const [leaveGroupLoading, setLeaveGroupLoading] = useState<boolean>(false);
+
+  // Set up real-time subscriptions for group data
+  useEffect(() => {
+    if (!groupId || !auth?.myUser?.userId) return;
+
+    // Subscribe to group updates
+    const groupUnsubscribe = groupService.subscribeToGroup(groupId, updatedGroup => {
+      if (updatedGroup) {
+        setGroup(prevGroup => {
+          if (!prevGroup) return updatedGroup;
+          return { ...updatedGroup, userRole: prevGroup.userRole };
+        });
+      } else {
+        // Group was deleted
+        setNotification({
+          message: 'This group has been deleted',
+          type: 'info',
+        });
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+      }
+    });
+
+    // Subscribe to group members updates
+    const membersUnsubscribe = groupService.subscribeToGroupMembers(groupId, updatedMembers => {
+      setGroupMembers(updatedMembers);
+      setMemberCount(updatedMembers.length);
+    });
+
+    // Clean up subscriptions when component unmounts
+    return () => {
+      groupUnsubscribe();
+      membersUnsubscribe();
+    };
+  }, [groupId, auth?.myUser?.userId, navigate]);
 
   useEffect(() => {
     const fetchRatingData = async () => {

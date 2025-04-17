@@ -16,10 +16,6 @@ export const GroupHeader = ({ group, onBack, onLeave, currentUserId }: GroupHead
   const canLeaveGroup =
     group.userRole !== GroupMemberRole.ADMIN || group.createdBy !== currentUserId;
 
-  console.log('currentUserId', currentUserId);
-  console.log('group.createdBy', group.createdBy);
-  console.log('group.userRole', group.userRole);
-
   return (
     <Box
       sx={{
