@@ -26,7 +26,7 @@ export const MAX_GROUP_DESCRIPTION_LENGTH = 200;
 export interface GroupFormDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: (updatedGroup: Group) => void;
   mode: 'create' | 'edit';
   group: Group | null;
   user: MyUser;
@@ -85,7 +85,7 @@ export default function GroupFormDialog({
     setCreatedGroup(null);
     setCopiedCode(null);
     setNotification(null);
-  }, [mode, group]);
+  }, [mode, group, open]);
 
   // Subscribe to group updates when in edit mode
   useEffect(() => {
@@ -172,14 +172,36 @@ export default function GroupFormDialog({
       setError(null);
 
       if (mode === 'create' && user) {
+        // Create the group
         const newGroup = await groupService.createGroup(groupName, groupDescription, user);
+
+        // Store the created group info for display
         setCreatedGroup({ groupId: newGroup.groupId, joinCode: newGroup.joinCode });
-        // Don't close the dialog immediately for create mode
+
+        // Show success notification
+        setNotification({
+          message: 'Group created successfully',
+          type: 'success',
+        });
+
+        // Don't call onSubmit or close the dialog yet - let the user see the success message and copy the join code
+        // The real-time subscription will handle updating the UI
       } else if (mode === 'edit' && group) {
+        // Create the updated group object
+        const updatedGroup: Group = {
+          ...group,
+          groupName,
+          groupDescription,
+        };
+
+        // Update the group in the database
         await groupService.updateGroup(group.groupId, {
           groupName,
           groupDescription,
         });
+
+        // Notify parent of the update for immediate local state update
+        onSubmit(updatedGroup);
 
         // Show success notification
         setNotification({
@@ -187,8 +209,7 @@ export default function GroupFormDialog({
           type: 'success',
         });
 
-        // For edit mode, close immediately and notify parent
-        onSubmit();
+        // Close the dialog
         onClose();
       }
     } catch (err) {
@@ -200,8 +221,11 @@ export default function GroupFormDialog({
   };
 
   const handleSuccessClose = () => {
-    onSubmit(); // Notify parent of success
-    handleClose(); // Reset state and close dialog
+    // Close the dialog and reset state
+    handleClose();
+
+    // Notify parent component that the dialog is closed
+    onClose();
   };
 
   const handleCopyJoinCode = async (joinCode: string) => {

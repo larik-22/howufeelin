@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useCallback } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
 import {
@@ -62,39 +62,12 @@ export default function Groups() {
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
   const [selectedGroupForMembers, setSelectedGroupForMembers] = useState<Group | null>(null);
-
-  // Use useCallback to memoize the fetchGroups function
-  const fetchGroups = useCallback(async () => {
-    if (!auth?.myUser?.userId) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      const userGroups = await groupService.getUserGroups(auth.myUser.userId);
-      setGroups(userGroups);
-
-      // Fetch member counts for all groups in a single query
-      if (userGroups.length > 0) {
-        const groupIds = userGroups.map(group => group.groupId);
-        const counts = await groupService.getGroupMemberCounts(groupIds);
-        setMemberCounts(counts);
-      } else {
-        setMemberCounts({});
-      }
-    } catch (err) {
-      console.error('Error fetching groups:', err);
-      setError('Failed to load groups. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  }, [auth?.myUser?.userId]);
 
   // Set up real-time subscription for user groups
   useEffect(() => {
@@ -104,8 +77,13 @@ export default function Groups() {
     let memberCountSubscription = () => {};
     const memberRoleSubscriptions: (() => void)[] = [];
 
+    console.log('Setting up user groups subscription for user:', auth.myUser.userId);
+
     // Subscribe to user groups updates
     const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
+      console.log('Received updated groups from subscription:', updatedGroups);
+
+      // Update the groups state with the new data
       setGroups(updatedGroups);
 
       // Clean up previous subscriptions
@@ -116,20 +94,34 @@ export default function Groups() {
       // Set up a single subscription for all group member counts
       if (updatedGroups.length > 0) {
         const groupIds = updatedGroups.map(group => group.groupId);
+        console.log('Setting up member count subscription for groups:', groupIds);
+
         const countUnsubscribe = groupService.subscribeToGroupMemberCounts(groupIds, counts => {
           console.log('Updating member counts for all groups:', counts);
           setMemberCounts(counts);
         });
         memberCountSubscription = countUnsubscribe;
+      } else {
+        // If there are no groups, reset the member counts
+        setMemberCounts({});
       }
 
       // Set up subscriptions for member role updates
       updatedGroups.forEach(group => {
+        console.log('Setting up member role subscription for group:', group.groupId);
+
         // Subscribe to member role updates
         const roleUnsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
           // Find the current user's role in this group
           const currentUserMember = members.find(m => m.userId === auth.myUser?.userId);
           if (currentUserMember) {
+            console.log(
+              'Updating user role for group:',
+              group.groupId,
+              'to:',
+              currentUserMember.role
+            );
+
             // Update the group with the new role
             setGroups(prevGroups =>
               prevGroups.map(g =>
@@ -157,6 +149,7 @@ export default function Groups() {
 
     // Clean up all subscriptions when component unmounts
     return () => {
+      console.log('Cleaning up all subscriptions');
       unsubscribe();
       memberCountSubscription();
       memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
@@ -182,12 +175,16 @@ export default function Groups() {
   };
 
   const handleGroupCreated = () => {
-    // No need to clear cache with real-time subscriptions
-    fetchGroups();
+    // The real-time subscription will handle updating the groups list
+    // We just need to show a success notification
     setNotification({
-      message: 'Group created successfully',
+      message:
+        dialogMode === 'create' ? 'Group created successfully' : 'Group updated successfully',
       type: 'success',
     });
+
+    // Close the dialog
+    handleDialogClose();
   };
 
   const handleCopyJoinCode = async (joinCode: string) => {
@@ -275,14 +272,24 @@ export default function Groups() {
 
     try {
       setIsDeleting(true);
-      await groupService.deleteGroup(selectedGroup.groupId, auth.myUser.userId);
 
+      // Store the group ID and name before deletion for cleanup
+      const groupIdToDelete = selectedGroup.groupId;
+      const groupNameToDelete = selectedGroup.groupName;
+
+      // Close the dialog immediately to prevent UI from freezing
+      handleCloseDeleteDialog();
+
+      // Delete the group
+      await groupService.deleteGroup(groupIdToDelete, auth.myUser.userId);
+
+      // Show success notification
       setNotification({
-        message: `Group "${selectedGroup.groupName}" deleted successfully`,
+        message: `Group "${groupNameToDelete}" deleted successfully`,
         type: 'success',
       });
 
-      handleCloseDeleteDialog();
+      // No need to manually update the groups list - the subscription will handle it
     } catch (err) {
       console.error('Error deleting group:', err);
       setNotification({
@@ -488,10 +495,10 @@ export default function Groups() {
     );
   }
 
-  if (error) {
+  if (notification && notification.type === 'error') {
     return (
       <Box sx={{ mt: 2 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error">{notification.message}</Alert>
       </Box>
     );
   }

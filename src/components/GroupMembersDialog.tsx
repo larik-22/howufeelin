@@ -39,6 +39,7 @@ interface GroupMembersDialogProps {
   onClose: () => void;
   group: Group;
   user: MyUser;
+  onMemberUpdate?: (member: GroupMember) => void;
 }
 
 interface Notification {
@@ -51,6 +52,7 @@ export default function GroupMembersDialog({
   onClose,
   group,
   user,
+  onMemberUpdate,
 }: GroupMembersDialogProps) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,6 +122,14 @@ export default function GroupMembersDialog({
       }
 
       await groupService.updateMemberRole(group.groupId, selectedMember.userId, newRole);
+
+      // Notify parent component of the role update
+      if (onMemberUpdate) {
+        onMemberUpdate({
+          ...selectedMember,
+          role: newRole,
+        });
+      }
 
       setNotification({
         message: `Role updated to ${newRole}`,

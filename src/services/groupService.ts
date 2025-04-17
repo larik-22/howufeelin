@@ -456,6 +456,8 @@ class FirestoreGroupService implements GroupService {
 
   async deleteGroup(groupId: string, userId?: string): Promise<void> {
     try {
+      console.log('Deleting group:', groupId);
+
       // If userId is provided, verify the user has permission to delete the group
       if (userId) {
         // Get the group to check if the user is the creator
@@ -479,31 +481,54 @@ class FirestoreGroupService implements GroupService {
         }
       }
 
+      // First, delete all members to ensure proper cleanup
+      const memberQuery = query(this.membersCollection, where('groupId', '==', groupId));
+      const memberSnapshot = await getDocs(memberQuery);
+
       // Use a batch to delete the group and all its members in a single transaction
       const batch = writeBatch(db);
+
+      // Delete all members first
+      memberSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
 
       // Delete the group document
       batch.delete(doc(this.groupsCollection, groupId));
 
-      // Delete all members of the group
-      const q = query(this.membersCollection, where('groupId', '==', groupId));
-      const querySnapshot = await getDocs(q);
-
-      // Add all member deletions to the batch
-      querySnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-
       // Commit the batch
       await batch.commit();
+      console.log('Group and members deleted successfully');
 
       // Delete all ratings associated with this group
       // This is done separately since it's in a different collection
       await ratingService.deleteAllRatingsForGroup(groupId);
+      console.log('Ratings deleted successfully');
 
-      // Unsubscribe from any active subscriptions for this group
-      this.unsubscribe(this.generateSubscriptionId('group', groupId));
-      this.unsubscribe(this.generateSubscriptionId('members', groupId));
+      // Clean up all subscriptions for this group
+      const subscriptionsToClean = [
+        this.generateSubscriptionId('group', groupId),
+        this.generateSubscriptionId('members', groupId),
+        this.generateSubscriptionId('memberCounts', groupId),
+        this.generateSubscriptionId('userGroups', userId || ''),
+        this.generateSubscriptionId('groupMembers', groupId),
+      ];
+
+      // Unsubscribe from all related subscriptions
+      subscriptionsToClean.forEach(subId => {
+        this.unsubscribe(subId);
+      });
+
+      // Force a refresh of user groups subscription if userId is provided
+      if (userId) {
+        const userGroupsSubId = this.generateSubscriptionId('userGroups', userId);
+        if (this.activeSubscriptions[userGroupsSubId]) {
+          this.unsubscribe(userGroupsSubId);
+          // The subscription will be automatically recreated by the component
+        }
+      }
+
+      console.log('Subscriptions cleaned up');
     } catch (error) {
       console.error('Error deleting group:', error);
       throw error;
@@ -684,6 +709,7 @@ class FirestoreGroupService implements GroupService {
 
     // Create a map to store group subscriptions
     const groupSubscriptions: Record<string, Unsubscribe> = {};
+    let currentGroups: Group[] = [];
 
     // First, get all group IDs the user is a member of
     const memberQuery = query(this.membersCollection, where('userId', '==', userId));
@@ -692,13 +718,11 @@ class FirestoreGroupService implements GroupService {
     const unsubscribe = onSnapshot(
       memberQuery,
       async memberSnapshot => {
-        if (memberSnapshot.empty) {
-          // Clean up any existing group subscriptions
-          Object.values(groupSubscriptions).forEach(unsub => unsub());
-          Object.keys(groupSubscriptions).forEach(key => delete groupSubscriptions[key]);
-          callback([]);
-          return;
-        }
+        console.log('Member snapshot updated:', memberSnapshot.size, 'memberships');
+
+        // Get current group IDs from the member snapshot
+        const currentGroupIds = memberSnapshot.docs.map(doc => doc.data().groupId);
+        console.log('Current group IDs:', currentGroupIds);
 
         // Create a map of groupId to role
         const roleMap = new Map<string, GroupMemberRole>();
@@ -707,30 +731,44 @@ class FirestoreGroupService implements GroupService {
           roleMap.set(data.groupId, data.role);
         });
 
+        if (memberSnapshot.empty) {
+          // Clean up any existing group subscriptions
+          Object.values(groupSubscriptions).forEach(unsub => unsub());
+          Object.keys(groupSubscriptions).forEach(key => delete groupSubscriptions[key]);
+          currentGroups = [];
+          callback([]);
+          return;
+        }
+
         // Extract all group IDs
         const groupIds = memberSnapshot.docs.map(doc => doc.data().groupId);
+        console.log('User is a member of groups:', groupIds);
 
         // Clean up subscriptions for groups the user is no longer a member of
         Object.keys(groupSubscriptions).forEach(groupId => {
           if (!groupIds.includes(groupId)) {
+            console.log('Unsubscribing from group that user is no longer a member of:', groupId);
             groupSubscriptions[groupId]();
             delete groupSubscriptions[groupId];
+            // Remove the group from currentGroups
+            currentGroups = currentGroups.filter(g => g.groupId !== groupId);
           }
         });
 
         // If there are no groups, return empty array
         if (groupIds.length === 0) {
+          currentGroups = [];
           callback([]);
           return;
         }
 
         // Set up individual subscriptions for each group
-        const groups: Group[] = [];
-
-        // Function to update the callback with the latest data
         const updateCallback = () => {
           // Sort groups to maintain consistent order
-          const sortedGroups = [...groups].sort((a, b) => a.groupName.localeCompare(b.groupName));
+          const sortedGroups = [...currentGroups].sort((a, b) =>
+            a.groupName.localeCompare(b.groupName)
+          );
+          console.log('Updating groups list with:', sortedGroups.length, 'groups');
           callback(sortedGroups);
         };
 
@@ -738,6 +776,8 @@ class FirestoreGroupService implements GroupService {
         groupIds.forEach(groupId => {
           // Skip if we already have a subscription for this group
           if (groupSubscriptions[groupId]) return;
+
+          console.log('Setting up subscription for group:', groupId);
 
           // Create a subscription for this group
           const groupUnsubscribe = onSnapshot(
@@ -751,23 +791,23 @@ class FirestoreGroupService implements GroupService {
                   userRole: roleMap.get(doc.id) || GroupMemberRole.MEMBER,
                 };
 
+                console.log('Group updated:', group.groupName);
+
                 // Update or add the group in our array
-                const index = groups.findIndex(g => g.groupId === doc.id);
+                const index = currentGroups.findIndex(g => g.groupId === doc.id);
                 if (index >= 0) {
-                  groups[index] = group;
+                  currentGroups[index] = group;
                 } else {
-                  groups.push(group);
+                  currentGroups.push(group);
                 }
 
                 // Notify the callback with the updated groups
                 updateCallback();
               } else {
                 // Group was deleted, remove it from our array
-                const index = groups.findIndex(g => g.groupId === groupId);
-                if (index >= 0) {
-                  groups.splice(index, 1);
-                  updateCallback();
-                }
+                console.log('Group deleted:', groupId);
+                currentGroups = currentGroups.filter(g => g.groupId !== groupId);
+                updateCallback();
 
                 // Clean up the subscription
                 groupSubscriptions[groupId]();
@@ -782,6 +822,9 @@ class FirestoreGroupService implements GroupService {
           // Store the subscription
           groupSubscriptions[groupId] = groupUnsubscribe;
         });
+
+        // Initial update of the callback with current groups
+        updateCallback();
       },
       error => {
         console.error('Error subscribing to user groups:', error);
