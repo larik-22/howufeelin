@@ -11,7 +11,7 @@ export default function DashboardBaseLayout({ children }: DashboardBaseLayoutPro
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navbar />
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ py: 4, px: { xs: 0, sm: 2 } }}>
         {children || <Outlet />}
       </Container>
     </Box>

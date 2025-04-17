@@ -19,6 +19,8 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import GroupIcon from '@mui/icons-material/Group';
@@ -47,6 +49,8 @@ export default function Groups() {
   const auth = useContext(AuthContext);
   const navigate = useNavigate();
   const { hasPermission, getRoleColor, getRoleLabel } = useGroupPermissions();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -279,10 +283,19 @@ export default function Groups() {
         }}
         onClick={() => !isDeletingThisGroup && handleNavigateToGroupDetail(group.groupId)}
       >
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <GroupIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6" component="h3" sx={{ flexGrow: 1 }}>
+        <CardContent sx={{ flexGrow: 1, p: { xs: 2, sm: 3 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 1.5, sm: 2 } }}>
+            <GroupIcon
+              sx={{ mr: 1, color: 'primary.main', fontSize: { xs: '1.2rem', sm: '1.5rem' } }}
+            />
+            <Typography
+              variant="h6"
+              component="h3"
+              sx={{
+                flexGrow: 1,
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+              }}
+            >
               {group.groupName}
               {isDeletingThisGroup && (
                 <CircularProgress size={16} sx={{ ml: 1, display: 'inline-block' }} />
@@ -318,8 +331,12 @@ export default function Groups() {
               </Tooltip>
             )}
           </Box>
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">
+          <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+            >
               {truncateDescription(group.groupDescription, group.groupId)}
             </Typography>
             {group.groupDescription.length > DESCRIPTION_MAX_LENGTH && (
@@ -329,7 +346,12 @@ export default function Groups() {
                   e.stopPropagation(); // Prevent card click when clicking show more/less
                   toggleDescription(group.groupId);
                 }}
-                sx={{ mt: 0.5, p: 0, minWidth: 'auto' }}
+                sx={{
+                  mt: 0.5,
+                  p: 0,
+                  minWidth: 'auto',
+                  fontSize: { xs: '0.7rem', sm: '0.75rem' },
+                }}
                 endIcon={
                   expandedDescriptions[group.groupId] ? <ExpandLessIcon /> : <ExpandMoreIcon />
                 }
@@ -338,16 +360,24 @@ export default function Groups() {
               </Button>
             )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
             <PeopleIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+            >
               {memberCounts[group.groupId] || 0}{' '}
               {memberCounts[group.groupId] === 1 ? 'member' : 'members'}
             </Typography>
             <Chip
               size="small"
               label={getRoleLabel(group.userRole)}
-              sx={{ ml: 1 }}
+              sx={{
+                ml: 1,
+                height: { xs: 20, sm: 24 },
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+              }}
               color={getRoleColor(group.userRole)}
             />
           </Box>
@@ -355,16 +385,20 @@ export default function Groups() {
             label={`Join Code: ${group.joinCode}`}
             size="small"
             variant="outlined"
-            sx={{ mt: 1 }}
+            sx={{
+              mt: 1,
+              height: { xs: 24, sm: 28 },
+              fontSize: { xs: '0.7rem', sm: '0.75rem' },
+            }}
             onClick={e => {
               e.stopPropagation(); // Prevent card click when clicking join code
               handleCopyJoinCode(group.joinCode);
             }}
-            icon={<ContentCopyIcon />}
+            icon={<ContentCopyIcon fontSize="small" />}
             color={copiedCode === group.joinCode ? 'success' : 'default'}
           />
         </CardContent>
-        <CardActions>
+        <CardActions sx={{ p: { xs: 1, sm: 2 }, pt: 0 }}>
           {hasPermission(group, GroupPermission.MANAGE_MEMBERS) && !isDeletingThisGroup ? (
             <Button
               size="small"
@@ -373,6 +407,7 @@ export default function Groups() {
                 e.stopPropagation(); // Prevent card click when clicking manage members
                 // This will be implemented in the future
               }}
+              sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}
             >
               Manage Members
             </Button>
@@ -404,16 +439,37 @@ export default function Groups() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          mb: 3,
+          gap: { xs: 2, sm: 0 },
+        }}
+      >
         <Typography variant="h5" component="h2">
           My Groups
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            width: { xs: '100%', sm: 'auto' },
+            justifyContent: { xs: 'space-between', sm: 'flex-end' },
+          }}
+        >
           <Button
             variant="outlined"
             color="primary"
             startIcon={<PeopleIcon />}
             onClick={handleOpenJoinDialog}
+            fullWidth={false}
+            sx={{
+              minWidth: { xs: '48%', sm: 'auto' },
+              whiteSpace: 'nowrap',
+            }}
           >
             Join Group
           </Button>
@@ -422,6 +478,11 @@ export default function Groups() {
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenCreateDialog}
+            fullWidth={false}
+            sx={{
+              minWidth: { xs: '48%', sm: 'auto' },
+              whiteSpace: 'nowrap',
+            }}
           >
             Create Group
           </Button>
@@ -429,8 +490,8 @@ export default function Groups() {
       </Box>
 
       {groups.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
-          <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+        <Card sx={{ p: { xs: 2, sm: 4 }, textAlign: 'center' }}>
+          <GroupIcon sx={{ fontSize: { xs: 36, sm: 48 }, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
             You haven't joined any groups yet
           </Typography>
@@ -451,7 +512,7 @@ export default function Groups() {
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
-            gap: 3,
+            gap: { xs: 2, sm: 3 },
           }}
         >
           {groups.map(renderGroupCard)}
@@ -480,6 +541,7 @@ export default function Groups() {
         onClose={isDeleting ? undefined : handleCloseDeleteDialog}
         aria-labelledby="delete-dialog-title"
         aria-describedby="delete-dialog-description"
+        fullScreen={isMobile}
       >
         <DialogTitle id="delete-dialog-title" sx={{ display: 'flex', alignItems: 'center' }}>
           {isDeleting && <CircularProgress size={20} sx={{ mr: 1 }} />}
@@ -491,7 +553,7 @@ export default function Groups() {
             cannot be undone.
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: { xs: 2, sm: 3 } }}>
           <Button onClick={handleCloseDeleteDialog} disabled={isDeleting}>
             Cancel
           </Button>

@@ -40,38 +40,99 @@ export const GroupDetails = ({
   groupMembers = [],
 }: GroupDetailsProps) => {
   return (
-    <Card sx={{ mb: 3, boxShadow: 3, borderRadius: 2 }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+    <Card
+      sx={{
+        mb: { xs: 2, sm: 3 },
+        boxShadow: { xs: 1, sm: 3 },
+        borderRadius: { xs: 1, sm: 2 },
+        overflow: 'hidden',
+      }}
+    >
+      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            mb: { xs: 1.5, sm: 2 },
+            gap: { xs: 1, sm: 0 },
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <GroupIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6">Group Details</Typography>
+            <GroupIcon
+              sx={{
+                mr: 1,
+                color: 'primary.main',
+                fontSize: { xs: '1.2rem', sm: '1.5rem' },
+              }}
+            />
+            <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+              Group Details
+            </Typography>
           </Box>
           <Chip
             label={getRoleLabel(group.userRole)}
             color={getRoleColor(group.userRole)}
             size="small"
-            sx={{ fontWeight: 'bold' }}
+            sx={{
+              fontWeight: 'bold',
+              height: { xs: 24, sm: 28 },
+              fontSize: { xs: '0.7rem', sm: '0.75rem' },
+            }}
           />
         </Box>
-        <Divider sx={{ mb: 2 }} />
-        <Typography variant="body1" sx={{ mb: 2 }}>
+        <Divider sx={{ mb: { xs: 1.5, sm: 2 } }} />
+        <Typography
+          variant="body1"
+          sx={{
+            mb: { xs: 1.5, sm: 2 },
+            fontSize: { xs: '0.875rem', sm: '1rem' },
+          }}
+        >
           {group.groupDescription || 'No description provided.'}
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <PeopleIcon sx={{ mr: 1, fontSize: '1.2rem', color: 'primary.main' }} />
-          <Typography variant="body2">
-            {memberCount} {memberCount === 1 ? 'member' : 'members'}
-          </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            mb: { xs: 1.5, sm: 2 },
+            gap: { xs: 1, sm: 0 },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <PeopleIcon
+              sx={{
+                mr: 1,
+                fontSize: { xs: '1rem', sm: '1.2rem' },
+                color: 'primary.main',
+              }}
+            />
+            <Typography variant="body2" sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
+              {memberCount} {memberCount === 1 ? 'member' : 'members'}
+            </Typography>
+          </Box>
           {loading ? (
-            <Box sx={{ display: 'flex', ml: 2 }}>
-              <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
-              <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
-              <Skeleton variant="circular" width={30} height={30} sx={{ mr: 1 }} />
-              <Skeleton variant="circular" width={30} height={30} />
+            <Box sx={{ display: 'flex', ml: { xs: 0, sm: 2 }, mt: { xs: 1, sm: 0 } }}>
+              <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+              <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+              <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+              <Skeleton variant="circular" width={24} height={24} />
             </Box>
           ) : (
-            <AvatarGroup max={4} sx={{ ml: 2 }}>
+            <AvatarGroup
+              max={4}
+              sx={{
+                ml: { xs: 0, sm: 2 },
+                mt: { xs: 1, sm: 0 },
+                '& .MuiAvatar-root': {
+                  width: { xs: 24, sm: 30 },
+                  height: { xs: 24, sm: 30 },
+                  fontSize: { xs: '0.7rem', sm: '0.875rem' },
+                },
+              }}
+            >
               {groupMembers.map((member: GroupMember, index: number) => {
                 // Get the user's initial for the fallback avatar
                 const userInitial = member.displayName?.[0]?.toUpperCase() || 'U';
@@ -94,13 +155,13 @@ export const GroupDetails = ({
           <Paper
             variant="outlined"
             sx={{
-              p: 1.5,
+              p: { xs: 1, sm: 1.5 },
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               backgroundColor:
                 copiedCode === group.joinCode ? 'action.selected' : 'background.paper',
-              borderRadius: 2,
+              borderRadius: { xs: 1, sm: 2 },
               borderColor: 'primary.main',
               width: '100%',
               maxWidth: { xs: '100%', sm: 300 },
@@ -111,15 +172,24 @@ export const GroupDetails = ({
               sx={{
                 fontFamily: 'monospace',
                 fontWeight: 'bold',
-                fontSize: { xs: '0.875rem', sm: '1rem' },
+                fontSize: { xs: '0.75rem', sm: '1rem' },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: { xs: '60%', sm: '70%' },
               }}
             >
               {group.joinCode}
             </Typography>
             <Button
               size="small"
-              startIcon={<ContentCopyIcon />}
+              startIcon={<ContentCopyIcon fontSize="small" />}
               onClick={() => onCopyJoinCode(group.joinCode)}
+              sx={{
+                minWidth: { xs: 'auto', sm: 'auto' },
+                px: { xs: 1, sm: 2 },
+                fontSize: { xs: '0.7rem', sm: '0.75rem' },
+              }}
             >
               {copiedCode === group.joinCode ? 'Copied!' : 'Copy'}
             </Button>

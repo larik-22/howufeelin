@@ -3,9 +3,10 @@
 - [x] add analytics
 - [x] deploy & CI
 - [x] fix group/:id router (when refreshed redirected to dashboard but should stay on same page)
-- [] when group removed, clean up groupMember, ratings, etc
-- [ ] optimize firebase calls (userService, groupService, ratingService) [https://blog.eclypse.io/how-to-reduce-firestore-reads-f7af6f012c84], [https://firebase.google.com/docs/reference/android/com/google/firebase/firestore/Source]
-- [ ] on group details page, make sure we fetch per day when calender date is clicked (now not working)
+- [x] when group removed, clean up groupMember, ratings, etc
+- [x] optimize firebase calls (userService, groupService, ratingService) [https://blog.eclypse.io/how-to-reduce-firestore-reads-f7af6f012c84], [https://firebase.google.com/docs/reference/android/com/google/firebase/firestore/Source]
+- [x] on group details page, make sure we fetch per day when calender date is clicked (now not working)
+- [ ] colors for chart according to legend and rating
 - [ ] client-side validation of group name, username on signup, join code etc. Create group validation error
 - [ ] mobile version with better UX
 - [ ] on group details page -> if admin, edit group and people; manage people (remove, make admin) (but think what to do with a button as well)
