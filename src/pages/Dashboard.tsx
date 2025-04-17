@@ -43,10 +43,9 @@ export default function Dashboard() {
       <Paper
         elevation={0}
         sx={{
-          p: { xs: 2, sm: 3 },
+          p: { xs: 2, sm: 4 },
           mb: { xs: 5, sm: 3, md: 4 },
-          background:
-            'linear-gradient(to right, rgba(143, 197, 163, 0.1), rgba(143, 197, 163, 0.05))',
+          backgroundColor: 'background.main',
           borderRadius: 2,
         }}
       >
