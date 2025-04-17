@@ -9,9 +9,9 @@ export const theme = createTheme({
       contrastText: '#2C3E50', // Dark blue-gray for contrast
     },
     secondary: {
-      main: '#8FC5A3', // Soft mint green (swapped with primary)
-      light: '#D1E9D6', // Lighter mint
-      dark: '#7ABF8E', // Darker mint
+      main: '#B5C5FF', // Soft periwinkle blue (complements pink)
+      light: '#D1DBFF', // Lighter periwinkle
+      dark: '#8BA7FF', // Darker periwinkle
       contrastText: '#2C3E50',
     },
     background: {
@@ -72,6 +72,15 @@ export const theme = createTheme({
           textTransform: 'none',
           fontWeight: 500,
           padding: '8px 16px',
+          borderRadius: 8,
+          transition: 'all 0.2s ease-in-out',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+          },
+        },
+        contained: {
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
         },
       },
     },
@@ -79,6 +88,32 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          transition: 'transform 0.2s, box-shadow 0.2s',
+          '&:hover': {
+            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.08)',
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          fontWeight: 500,
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
         },
       },
     },

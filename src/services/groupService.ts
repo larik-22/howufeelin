@@ -51,6 +51,10 @@ interface GroupService {
   }>;
   subscribeToGroup(groupId: string, callback: (group: Group | null) => void): Unsubscribe;
   subscribeToGroupMembers(groupId: string, callback: (members: GroupMember[]) => void): Unsubscribe;
+  subscribeToGroupMemberCounts(
+    groupIds: string[],
+    callback: (counts: Record<string, number>) => void
+  ): Unsubscribe;
   subscribeToUserGroups(userId: string, callback: (groups: Group[]) => void): Unsubscribe;
   isSubscriptionActive(type: string, id: string): boolean;
   unsubscribeAll(): void;
@@ -343,18 +347,23 @@ class FirestoreGroupService implements GroupService {
         return { [groupIds[0]]: count };
       }
 
-      const q = query(this.membersCollection, where('groupId', 'in', groupIds));
-      const querySnapshot = await getDocs(q);
-
+      // Initialize counts object with zeros for all group IDs
       const counts: Record<string, number> = {};
       groupIds.forEach(id => {
         counts[id] = 0;
       });
 
+      // Query for members in all groups at once
+      const q = query(this.membersCollection, where('groupId', 'in', groupIds));
+      const querySnapshot = await getDocs(q);
+
+      // Count members for each group
       querySnapshot.forEach(doc => {
         const data = doc.data();
         const groupId = data.groupId;
-        counts[groupId] = (counts[groupId] || 0) + 1;
+        if (groupId && groupId in counts) {
+          counts[groupId] = (counts[groupId] || 0) + 1;
+        }
       });
 
       return counts;
@@ -599,6 +608,65 @@ class FirestoreGroupService implements GroupService {
       error => {
         console.error('Error subscribing to group members:', error);
         callback([]);
+      }
+    );
+
+    // Store the subscription
+    this.activeSubscriptions[subscriptionId] = unsubscribe;
+
+    return unsubscribe;
+  }
+
+  /**
+   * Subscribe to member counts for multiple groups at once
+   * This is more efficient than creating individual subscriptions for each group
+   * @param groupIds Array of group IDs to subscribe to
+   * @param callback Function to call when member counts change
+   * @returns Unsubscribe function
+   */
+  subscribeToGroupMemberCounts(
+    groupIds: string[],
+    callback: (counts: Record<string, number>) => void
+  ): Unsubscribe {
+    if (groupIds.length === 0) {
+      callback({});
+      return () => {};
+    }
+
+    const subscriptionId = this.generateSubscriptionId('memberCounts', groupIds.join('_'));
+
+    // Unsubscribe from any existing subscription with the same ID
+    this.unsubscribe(subscriptionId);
+
+    // Initialize counts object with zeros for all group IDs
+    const counts: Record<string, number> = {};
+    groupIds.forEach(id => {
+      counts[id] = 0;
+    });
+
+    // Create a new subscription for all groups at once
+    const unsubscribe = onSnapshot(
+      query(this.membersCollection, where('groupId', 'in', groupIds)),
+      querySnapshot => {
+        // Reset counts
+        groupIds.forEach(id => {
+          counts[id] = 0;
+        });
+
+        // Count members for each group
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const groupId = data.groupId;
+          if (groupId && groupId in counts) {
+            counts[groupId] = (counts[groupId] || 0) + 1;
+          }
+        });
+
+        callback({ ...counts });
+      },
+      error => {
+        console.error('Error subscribing to group member counts:', error);
+        callback({});
       }
     );
 

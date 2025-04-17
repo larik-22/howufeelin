@@ -101,31 +101,30 @@ export default function Groups() {
     if (!auth?.myUser?.userId) return;
 
     setLoading(true); // Set loading when starting subscription
-    const memberCountSubscriptions: (() => void)[] = [];
+    let memberCountSubscription = () => {};
     const memberRoleSubscriptions: (() => void)[] = [];
 
     // Subscribe to user groups updates
     const unsubscribe = groupService.subscribeToUserGroups(auth.myUser.userId, updatedGroups => {
       setGroups(updatedGroups);
-      setLoading(false); // Clear loading when groups are received
 
       // Clean up previous subscriptions
-      memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
-      memberCountSubscriptions.length = 0;
+      memberCountSubscription();
       memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
       memberRoleSubscriptions.length = 0;
 
-      // Set up new subscriptions for each group's members
-      updatedGroups.forEach(group => {
-        // Subscribe to member count updates
-        const countUnsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
-          setMemberCounts(prevCounts => ({
-            ...prevCounts,
-            [group.groupId]: members.length,
-          }));
+      // Set up a single subscription for all group member counts
+      if (updatedGroups.length > 0) {
+        const groupIds = updatedGroups.map(group => group.groupId);
+        const countUnsubscribe = groupService.subscribeToGroupMemberCounts(groupIds, counts => {
+          console.log('Updating member counts for all groups:', counts);
+          setMemberCounts(counts);
         });
-        memberCountSubscriptions.push(countUnsubscribe);
+        memberCountSubscription = countUnsubscribe;
+      }
 
+      // Set up subscriptions for member role updates
+      updatedGroups.forEach(group => {
         // Subscribe to member role updates
         const roleUnsubscribe = groupService.subscribeToGroupMembers(group.groupId, members => {
           // Find the current user's role in this group
@@ -152,12 +151,14 @@ export default function Groups() {
         });
         return newCounts;
       });
+
+      setLoading(false); // Clear loading when groups are received
     });
 
     // Clean up all subscriptions when component unmounts
     return () => {
       unsubscribe();
-      memberCountSubscriptions.forEach(unsubscribe => unsubscribe());
+      memberCountSubscription();
       memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
       setLoading(false); // Ensure loading is cleared on unmount
     };
@@ -311,6 +312,7 @@ export default function Groups() {
     const isModerator = group.userRole === GroupMemberRole.MODERATOR;
     const canEdit = isAdmin || isModerator;
     const canDelete = isAdmin;
+    const memberCount = memberCounts[group.groupId] || 0;
 
     return (
       <Card
@@ -413,8 +415,7 @@ export default function Groups() {
               color="text.secondary"
               sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
             >
-              {memberCounts[group.groupId] || 0}{' '}
-              {memberCounts[group.groupId] === 1 ? 'member' : 'members'}
+              {memberCount > 0 ? memberCount : '...'} {memberCount === 1 ? 'member' : 'members'}
             </Typography>
             <Chip
               size="small"
