@@ -614,14 +614,20 @@ class FirestoreGroupService implements GroupService {
     // Unsubscribe from any existing subscription with the same ID
     this.unsubscribe(subscriptionId);
 
+    // Create a map to store group subscriptions
+    const groupSubscriptions: Record<string, Unsubscribe> = {};
+
     // First, get all group IDs the user is a member of
     const memberQuery = query(this.membersCollection, where('userId', '==', userId));
 
-    // Create a new subscription
+    // Create a new subscription for user's group memberships
     const unsubscribe = onSnapshot(
       memberQuery,
       async memberSnapshot => {
         if (memberSnapshot.empty) {
+          // Clean up any existing group subscriptions
+          Object.values(groupSubscriptions).forEach(unsub => unsub());
+          Object.keys(groupSubscriptions).forEach(key => delete groupSubscriptions[key]);
           callback([]);
           return;
         }
@@ -636,26 +642,78 @@ class FirestoreGroupService implements GroupService {
         // Extract all group IDs
         const groupIds = memberSnapshot.docs.map(doc => doc.data().groupId);
 
+        // Clean up subscriptions for groups the user is no longer a member of
+        Object.keys(groupSubscriptions).forEach(groupId => {
+          if (!groupIds.includes(groupId)) {
+            groupSubscriptions[groupId]();
+            delete groupSubscriptions[groupId];
+          }
+        });
+
         // If there are no groups, return empty array
         if (groupIds.length === 0) {
           callback([]);
           return;
         }
 
-        // Get all groups in a single query
-        const groupsQuery = query(this.groupsCollection, where('groupId', 'in', groupIds));
-        const groupsSnapshot = await getDocs(groupsQuery);
+        // Set up individual subscriptions for each group
+        const groups: Group[] = [];
 
-        // Map the results to Group objects and add role information
-        const groups = groupsSnapshot.docs.map(doc => {
-          const groupData = doc.data() as Group;
-          return {
-            ...groupData,
-            userRole: roleMap.get(groupData.groupId) || GroupMemberRole.MEMBER,
-          };
+        // Function to update the callback with the latest data
+        const updateCallback = () => {
+          // Sort groups to maintain consistent order
+          const sortedGroups = [...groups].sort((a, b) => a.groupName.localeCompare(b.groupName));
+          callback(sortedGroups);
+        };
+
+        // Set up subscriptions for each group
+        groupIds.forEach(groupId => {
+          // Skip if we already have a subscription for this group
+          if (groupSubscriptions[groupId]) return;
+
+          // Create a subscription for this group
+          const groupUnsubscribe = onSnapshot(
+            doc(this.groupsCollection, groupId),
+            doc => {
+              if (doc.exists()) {
+                const groupData = doc.data() as Group;
+                const group: Group = {
+                  ...groupData,
+                  groupId: doc.id,
+                  userRole: roleMap.get(doc.id) || GroupMemberRole.MEMBER,
+                };
+
+                // Update or add the group in our array
+                const index = groups.findIndex(g => g.groupId === doc.id);
+                if (index >= 0) {
+                  groups[index] = group;
+                } else {
+                  groups.push(group);
+                }
+
+                // Notify the callback with the updated groups
+                updateCallback();
+              } else {
+                // Group was deleted, remove it from our array
+                const index = groups.findIndex(g => g.groupId === groupId);
+                if (index >= 0) {
+                  groups.splice(index, 1);
+                  updateCallback();
+                }
+
+                // Clean up the subscription
+                groupSubscriptions[groupId]();
+                delete groupSubscriptions[groupId];
+              }
+            },
+            error => {
+              console.error(`Error subscribing to group ${groupId}:`, error);
+            }
+          );
+
+          // Store the subscription
+          groupSubscriptions[groupId] = groupUnsubscribe;
         });
-
-        callback(groups);
       },
       error => {
         console.error('Error subscribing to user groups:', error);
@@ -663,10 +721,14 @@ class FirestoreGroupService implements GroupService {
       }
     );
 
-    // Store the subscription
+    // Store the main subscription
     this.activeSubscriptions[subscriptionId] = unsubscribe;
 
-    return unsubscribe;
+    // Return a function that cleans up all subscriptions
+    return () => {
+      unsubscribe();
+      Object.values(groupSubscriptions).forEach(unsub => unsub());
+    };
   }
 }
 
