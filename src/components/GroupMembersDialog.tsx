@@ -31,7 +31,7 @@ import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 import { getRoleColor, getRoleLabel, canManageMember, canRemoveMember } from '@/utils/roleUtils';
 
 interface GroupMembersDialogProps {

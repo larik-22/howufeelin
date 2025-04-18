@@ -7,6 +7,7 @@ import {
   RulesTestContext,
 } from '@firebase/rules-unit-testing';
 import { Timestamp } from 'firebase/firestore';
+import { GroupMemberRole } from '../src/types/GroupMemberRole';
 
 describe('Firebase Security Rules', () => {
   let testEnv: RulesTestEnvironment;
@@ -293,7 +294,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'ADMIN',
+        role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
       });
 
@@ -322,7 +323,7 @@ describe('Firebase Security Rules', () => {
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -351,7 +352,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'ADMIN',
+        role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
       });
 
@@ -375,7 +376,7 @@ describe('Firebase Security Rules', () => {
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -403,7 +404,7 @@ describe('Firebase Security Rules', () => {
         bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
           groupId: 'group1',
           userId: 'bob',
-          role: 'MEMBER',
+          role: GroupMemberRole.MEMBER,
           joinedAt: Timestamp.now(),
         })
       );
@@ -448,7 +449,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'ADMIN',
+        role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
       });
 
@@ -456,14 +457,14 @@ describe('Firebase Security Rules', () => {
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
       // Then update the member role
       await assertSucceeds(
         aliceContext.firestore().collection('groupMembers').doc('bob_group1').update({
-          role: 'MODERATOR',
+          role: GroupMemberRole.MODERATOR,
           updatedAt: Timestamp.now(),
         })
       );
@@ -485,7 +486,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'ADMIN',
+        role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
       });
 
@@ -493,14 +494,14 @@ describe('Firebase Security Rules', () => {
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
       // Then try to update the member role
       await assertFails(
         bobContext.firestore().collection('groupMembers').doc('alice_group1').update({
-          role: 'MEMBER',
+          role: GroupMemberRole.MEMBER,
           updatedAt: Timestamp.now(),
         })
       );
@@ -522,7 +523,7 @@ describe('Firebase Security Rules', () => {
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -548,7 +549,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'ADMIN',
+        role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
       });
 
@@ -556,7 +557,7 @@ describe('Firebase Security Rules', () => {
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -585,7 +586,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -643,7 +644,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -676,7 +677,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -708,7 +709,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -750,7 +751,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -789,14 +790,14 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -843,14 +844,14 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MODERATOR',
+        role: GroupMemberRole.MODERATOR,
         joinedAt: Timestamp.now(),
       });
 
       await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
         groupId: 'group1',
         userId: 'bob',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -886,7 +887,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 
@@ -922,7 +923,7 @@ describe('Firebase Security Rules', () => {
       await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
         groupId: 'group1',
         userId: 'alice',
-        role: 'MEMBER',
+        role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
       });
 

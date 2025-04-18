@@ -1,4 +1,4 @@
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 export const getRoleColor = (role: GroupMemberRole): 'primary' | 'secondary' | 'default' => {
   switch (role) {

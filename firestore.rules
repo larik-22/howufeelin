@@ -4,137 +4,137 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Helper functions
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null && request.auth.uid != null;
     }
     
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    function isValidEmail(email) {
-      return email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$');
-    }
-    
-    function isValidUsername(username) {
-      return username.size() >= 3 && username.size() <= 30 
-        && username.matches('^[a-zA-Z0-9_-]+$');
-    }
-    
-    function isValidRating(rating) {
-      return rating is number && rating >= 1 && rating <= 5;
-    }
-    
-    function isValidDate(date) {
-      return date is string && date.matches('^\\d{4}-\\d{2}-\\d{2}$');
-    }
-    
-    function getGroupRole(groupId) {
-      let memberDoc = get(/databases/$(database)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
-      return memberDoc != null ? memberDoc.data.role : null;
+    function isGroupMember(groupId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/groupMembers/$(groupId + '_' + request.auth.uid));
     }
     
     function isGroupAdmin(groupId) {
-      return getGroupRole(groupId) == 'ADMIN';
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/groupMembers/$(groupId + '_' + request.auth.uid)) &&
+        get(/databases/$(database)/documents/groupMembers/$(groupId + '_' + request.auth.uid)).data.role == 'admin';
     }
     
     function isGroupModerator(groupId) {
-      return getGroupRole(groupId) == 'MODERATOR';
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/groupMembers/$(groupId + '_' + request.auth.uid)) &&
+        (get(/databases/$(database)/documents/groupMembers/$(groupId + '_' + request.auth.uid)).data.role == 'moderator' ||
+         get(/databases/$(database)/documents/groupMembers/$(groupId + '_' + request.auth.uid)).data.role == 'admin');
     }
     
-    function isGroupMember(groupId) {
-      return getGroupRole(groupId) == 'MEMBER';
+    function isGroupCreator(groupId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/groups/$(groupId)).data.createdBy == request.auth.uid;
     }
     
-    function hasValidRole(role) {
-      return role in ['ADMIN', 'MODERATOR', 'MEMBER'];
+    function hasValidGroupName() {
+      return request.resource.data.groupName is string && 
+             request.resource.data.groupName.size() >= 3;
     }
     
-    function isMemberOfGroup(groupId) {
-      return getGroupRole(groupId) != null;
+    function hasValidJoinCode() {
+      return request.resource.data.joinCode is string && 
+             request.resource.data.joinCode.size() >= 4;
     }
     
-    function isValidGroupName(name) {
-      return name is string && name.size() >= 3 && name.size() <= 50;
+    function hasValidRole() {
+      return request.resource.data.role in ['member', 'moderator', 'admin'];
     }
     
-    function isValidJoinCode(code) {
-      return code is string && code.size() >= 6 && code.size() <= 12 
-        && code.matches('^[a-zA-Z0-9_-]+$');
-    }
-    
-    function isToday(date) {
-      return date is string && date.matches('^\\d{4}-\\d{2}-\\d{2}$') && date == request.time.toDate().toISOString().substring(0, 10);
-    }
-
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() 
-        && request.auth.uid == userId
-        && isValidEmail(request.resource.data.email)
-        && isValidUsername(request.resource.data.username)
-        && request.resource.data.createdAt is timestamp;
-      allow update: if isOwner(userId)
-        && (!request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['email', 'username', 'createdAt']))
-        && request.resource.data.updatedAt is timestamp;
-      allow delete: if false; // Prevent user deletion through client
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false; // Users cannot delete their accounts
     }
-
+    
     // Groups collection
     match /groups/{groupId} {
-      allow read: if isAuthenticated() && (
-        isMemberOfGroup(groupId) || 
-        request.resource.data.joinCode == request.query.limit(1).joinCode
-      );
-      allow create: if isAuthenticated()
-        && isValidGroupName(request.resource.data.groupName)
-        && isValidJoinCode(request.resource.data.joinCode)
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isAuthenticated() 
-        && isGroupAdmin(groupId)
-        && (!request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['createdAt', 'createdBy']))
-        && request.resource.data.updatedAt is timestamp;
-      allow delete: if isAuthenticated() && isGroupAdmin(groupId);
+      // Allow reading a specific group if the user is a member of the group
+      allow get: if isAuthenticated() && isGroupMember(groupId);
+      
+      // Allow listing groups (for join code uniqueness check)
+      allow list: if isAuthenticated();
+      
+      // Allow creating a group with valid data
+      allow create: if isAuthenticated() && 
+                     hasValidGroupName() && 
+                     hasValidJoinCode() && 
+                     request.resource.data.createdBy == request.auth.uid;
+      
+      // Allow updating a group if the user is an admin or creator
+      allow update: if isAuthenticated() && 
+                     (isGroupAdmin(groupId) || isGroupCreator(groupId)) && 
+                     hasValidGroupName() && 
+                     hasValidJoinCode();
+      
+      // Allow deleting a group if the user is an admin or creator
+      allow delete: if isAuthenticated() && 
+                     (isGroupAdmin(groupId) || isGroupCreator(groupId));
     }
-
-    // GroupMembers collection
+    
+    // Group Members collection
     match /groupMembers/{memberId} {
-      allow read: if isAuthenticated() && (
-        isMemberOfGroup(get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId) ||
-        memberId == request.auth.uid + '_' + request.query.limit(1).groupId
-      );
-      allow create: if isAuthenticated()
-        && memberId == request.auth.uid + '_' + request.resource.data.groupId
-        && hasValidRole(request.resource.data.role)
-        && request.resource.data.joinedAt is timestamp;
-      allow update: if isAuthenticated() 
-        && isGroupAdmin(get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId)
-        && hasValidRole(request.resource.data.role)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['joinedAt'])
-        && request.resource.data.updatedAt is timestamp;
-      allow delete: if isAuthenticated() 
-        && (isGroupAdmin(get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId)
-        || memberId == request.auth.uid + '_' + get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId);
+      // Allow reading a specific member document if the user is authenticated
+      allow get: if isAuthenticated();
+      
+      // Allow listing members if the user is authenticated
+      allow list: if isAuthenticated();
+      
+      // Allow creating a membership if it's for the authenticated user
+      allow create: if isAuthenticated() && 
+                     split(memberId, '_')[1] == request.auth.uid && 
+                     hasValidRole();
+      
+      // Allow updating a membership if the user is an admin or if it's their own membership
+      // and they're not changing their role
+      allow update: if isAuthenticated() && 
+                     (isGroupAdmin(split(memberId, '_')[0]) || 
+                      (split(memberId, '_')[1] == request.auth.uid && 
+                       request.resource.data.role == resource.data.role));
+      
+      // Allow deleting a membership if the user is an admin or if it's their own membership
+      allow delete: if isAuthenticated() && 
+                     (isGroupAdmin(split(memberId, '_')[0]) || 
+                      split(memberId, '_')[1] == request.auth.uid);
     }
-
+    
     // Ratings collection
     match /ratings/{ratingId} {
-      allow read: if isAuthenticated() 
-        && isMemberOfGroup(get(/databases/$(database)/documents/ratings/$(ratingId)).data.groupId);
-      allow create: if isAuthenticated()
-        && ratingId == request.auth.uid + '_' + request.resource.data.groupId + '_' + request.resource.data.date
-        && isValidRating(request.resource.data.rating)
-        && isValidDate(request.resource.data.date)
-        && isGroupMember(request.resource.data.groupId)
-        && !exists(/databases/$(database)/documents/ratings/$(ratingId))
-        && request.resource.data.createdAt is timestamp;
-      allow update: if false; // Prevent all updates to ratings
-      allow delete: if isAuthenticated()
-        && (isGroupModerator(get(/databases/$(database)/documents/ratings/$(ratingId)).data.groupId)
-        || isGroupAdmin(get(/databases/$(database)/documents/ratings/$(ratingId)).data.groupId));
+      // Allow reading ratings if the user is a member of the group
+      allow get: if isAuthenticated() && 
+                  isGroupMember(resource.data.groupId);
+      
+      // Allow listing ratings if the user is a member of the group
+      allow list: if isAuthenticated() && 
+                   isGroupMember(request.query.filters[0].value);
+      
+      // Allow creating a rating if the user is a member of the group
+      allow create: if isAuthenticated() && 
+                     isGroupMember(request.resource.data.groupId) && 
+                     request.resource.data.userId == request.auth.uid;
+      
+      // Allow updating a rating if the user is the owner of the rating
+      allow update: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      
+      // Allow deleting a rating if the user is the owner of the rating or an admin of the group
+      allow delete: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      isGroupAdmin(resource.data.groupId));
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
-} 
+}

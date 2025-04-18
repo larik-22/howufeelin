@@ -18,7 +18,7 @@ import { groupService } from '@/services/groupService';
 import { ratingService, RatingError } from '@/services/ratingService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 import { Rating } from '@/types/Rating';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';

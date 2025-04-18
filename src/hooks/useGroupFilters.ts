@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Group } from '@/types/Group';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 // Filter types
 export type FilterTab = 'all' | 'admin' | 'moderator' | 'member';
