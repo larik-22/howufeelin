@@ -8,11 +8,12 @@
 - [x] on group details page, make sure we fetch per day when calender date is clicked (now not working)
 - [x] real-time updates: group members, group details, group ratings
 - [x] on group details page -> if admin, edit group and people; manage people (remove, make admin) (but think what to do with a button as well)
+- [x] filtering of groups (own, joined, all)
+- [ ] test security rules
 - [ ] auth validation of username
 - [ ] client-side validation of group name, join code etc. Create group validation error
 - [ ] colors for chart according to legend and rating
 - [ ] mobile version with better UX
-- [ ] filtering of groups (own, joined, all)
 - [ ] profile page (change password, change email, change username)
 - [ ] read / write security rules and constrains define
 - [ ] improve UX: snackbars, loading, etc;
