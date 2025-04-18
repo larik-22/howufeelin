@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Group } from '@/types/Group';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 interface UseLeaveGroupResult {
   leaveGroupModalOpen: boolean;

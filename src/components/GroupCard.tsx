@@ -20,7 +20,7 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import { Group } from '@/types/Group';
 import { GroupPermission } from '@/hooks/useGroupPermissions';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 // Constants
 const DESCRIPTION_MAX_LENGTH = 100;

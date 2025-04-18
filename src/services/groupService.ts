@@ -18,12 +18,7 @@ import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
 import { ratingService } from '@/services/ratingService';
-
-export enum GroupMemberRole {
-  MEMBER = 'member',
-  MODERATOR = 'moderator',
-  ADMIN = 'admin',
-}
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 interface GroupService {
   createGroup(name: string, description: string, user: MyUser): Promise<Group>;

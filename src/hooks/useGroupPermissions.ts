@@ -1,4 +1,4 @@
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 import { Group } from '@/types/Group';
 
 export const useGroupPermissions = () => {
