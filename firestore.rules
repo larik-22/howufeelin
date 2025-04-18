@@ -2,18 +2,139 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidEmail(email) {
+      return email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$');
+    }
+    
+    function isValidUsername(username) {
+      return username.size() >= 3 && username.size() <= 30 
+        && username.matches('^[a-zA-Z0-9_-]+$');
+    }
+    
+    function isValidRating(rating) {
+      return rating is number && rating >= 1 && rating <= 5;
+    }
+    
+    function isValidDate(date) {
+      return date is string && date.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+    
+    function getGroupRole(groupId) {
+      let memberDoc = get(/databases/$(database)/documents/groupMembers/$(request.auth.uid + '_' + groupId));
+      return memberDoc != null ? memberDoc.data.role : null;
+    }
+    
+    function isGroupAdmin(groupId) {
+      return getGroupRole(groupId) == 'ADMIN';
+    }
+    
+    function isGroupModerator(groupId) {
+      return getGroupRole(groupId) == 'MODERATOR';
+    }
+    
+    function isGroupMember(groupId) {
+      return getGroupRole(groupId) == 'MEMBER';
+    }
+    
+    function hasValidRole(role) {
+      return role in ['ADMIN', 'MODERATOR', 'MEMBER'];
+    }
+    
+    function isMemberOfGroup(groupId) {
+      return getGroupRole(groupId) != null;
+    }
+    
+    function isValidGroupName(name) {
+      return name is string && name.size() >= 3 && name.size() <= 50;
+    }
+    
+    function isValidJoinCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 12 
+        && code.matches('^[a-zA-Z0-9_-]+$');
+    }
+    
+    function isToday(date) {
+      return date is string && date.matches('^\\d{4}-\\d{2}-\\d{2}$') && date == request.time.toDate().toISOString().substring(0, 10);
+    }
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2025, 5, 16);
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && request.auth.uid == userId
+        && isValidEmail(request.resource.data.email)
+        && isValidUsername(request.resource.data.username)
+        && request.resource.data.createdAt is timestamp;
+      allow update: if isOwner(userId)
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['email', 'username', 'createdAt']))
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if false; // Prevent user deletion through client
+    }
+
+    // Groups collection
+    match /groups/{groupId} {
+      allow read: if isAuthenticated() && (
+        isMemberOfGroup(groupId) || 
+        request.resource.data.joinCode == request.query.limit(1).joinCode
+      );
+      allow create: if isAuthenticated()
+        && isValidGroupName(request.resource.data.groupName)
+        && isValidJoinCode(request.resource.data.joinCode)
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() 
+        && isGroupAdmin(groupId)
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['createdAt', 'createdBy']))
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if isAuthenticated() && isGroupAdmin(groupId);
+    }
+
+    // GroupMembers collection
+    match /groupMembers/{memberId} {
+      allow read: if isAuthenticated() && (
+        isMemberOfGroup(get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId) ||
+        memberId == request.auth.uid + '_' + request.query.limit(1).groupId
+      );
+      allow create: if isAuthenticated()
+        && memberId == request.auth.uid + '_' + request.resource.data.groupId
+        && hasValidRole(request.resource.data.role)
+        && request.resource.data.joinedAt is timestamp;
+      allow update: if isAuthenticated() 
+        && isGroupAdmin(get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId)
+        && hasValidRole(request.resource.data.role)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['joinedAt'])
+        && request.resource.data.updatedAt is timestamp;
+      allow delete: if isAuthenticated() 
+        && (isGroupAdmin(get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId)
+        || memberId == request.auth.uid + '_' + get(/databases/$(database)/documents/groupMembers/$(memberId)).data.groupId);
+    }
+
+    // Ratings collection
+    match /ratings/{ratingId} {
+      allow read: if isAuthenticated() 
+        && isMemberOfGroup(get(/databases/$(database)/documents/ratings/$(ratingId)).data.groupId);
+      allow create: if isAuthenticated()
+        && ratingId == request.auth.uid + '_' + request.resource.data.groupId + '_' + request.resource.data.date
+        && isValidRating(request.resource.data.rating)
+        && isValidDate(request.resource.data.date)
+        && isGroupMember(request.resource.data.groupId)
+        && !exists(/databases/$(database)/documents/ratings/$(ratingId))
+        && request.resource.data.createdAt is timestamp;
+      allow update: if false; // Prevent all updates to ratings
+      allow delete: if isAuthenticated()
+        && (isGroupModerator(get(/databases/$(database)/documents/ratings/$(ratingId)).data.groupId)
+        || isGroupAdmin(get(/databases/$(database)/documents/ratings/$(ratingId)).data.groupId));
     }
   }
-}
+} 
