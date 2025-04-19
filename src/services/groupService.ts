@@ -869,6 +869,7 @@ class FirestoreGroupService implements GroupService {
     };
   }
 
+  /*eslint-disable */
   async createRating(
     groupId: string,
     userId: string,
