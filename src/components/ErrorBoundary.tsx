@@ -1,13 +1,14 @@
 import { useRouteError, isRouteErrorResponse, useNavigate } from 'react-router';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
-import { theme } from '@/theme';
+import { createAppTheme } from '@/theme';
 import NotFound from '@/pages/NotFound';
 import { useEffect } from 'react';
 
 export default function ErrorBoundary() {
   const error = useRouteError();
   const navigate = useNavigate();
+  const theme = createAppTheme(null); // Use default theme for error pages
 
   useEffect(() => {
     // Check if it's a route error response
