@@ -19,6 +19,7 @@ describe('Firebase Security Rules', () => {
   const testUser = {
     email: 'test@example.com',
     username: 'testuser',
+    userId: 'alice',
   };
 
   const testGroup = {
@@ -27,20 +28,39 @@ describe('Firebase Security Rules', () => {
     groupId: 'group1',
   };
 
+  // Group member test data
+  const aliceGroupMember = {
+    displayName: 'Alice Smith',
+    email: 'alice@example.com',
+    groupId: 'group1',
+    joinedAt: Timestamp.now(),
+    photoURL: 'https://example.com/alice.jpg',
+    role: GroupMemberRole.ADMIN,
+    userId: 'alice',
+  };
+
+  const bobGroupMember = {
+    displayName: 'Bob Johnson',
+    email: 'bob@example.com',
+    groupId: 'group1',
+    joinedAt: Timestamp.now(),
+    photoURL: 'https://example.com/bob.jpg',
+    role: GroupMemberRole.MEMBER,
+    userId: 'bob',
+  };
+
   beforeAll(async () => {
     // Initialize the test environment
     testEnv = await initializeTestEnvironment({
-      projectId: 'demo-project-1234',
+      projectId: 'demo-' + Date.now(),
       firestore: {
         rules: fs.readFileSync('firestore.rules', 'utf8'),
-        host: 'localhost',
-        port: 8080,
       },
     });
 
-    // Create test contexts
-    aliceContext = testEnv.authenticatedContext('alice');
-    bobContext = testEnv.authenticatedContext('bob');
+    // Create test contexts for authenticated and unauthenticated users
+    aliceContext = testEnv.authenticatedContext('alice', { auth: { uid: 'alice' } });
+    bobContext = testEnv.authenticatedContext('bob', { auth: { uid: 'bob' } });
     unauthenticatedContext = testEnv.unauthenticatedContext();
   });
 
@@ -401,12 +421,7 @@ describe('Firebase Security Rules', () => {
 
       // Then join the group
       await assertSucceeds(
-        bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-          groupId: 'group1',
-          userId: 'bob',
-          role: GroupMemberRole.MEMBER,
-          joinedAt: Timestamp.now(),
-        })
+        bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember)
       );
     });
 
@@ -424,12 +439,14 @@ describe('Firebase Security Rules', () => {
 
       // Then try to join with invalid role
       await assertFails(
-        bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-          groupId: 'group1',
-          userId: 'bob',
-          role: 'INVALID_ROLE',
-          joinedAt: Timestamp.now(),
-        })
+        bobContext
+          .firestore()
+          .collection('groupMembers')
+          .doc('bob_group1')
+          .set({
+            ...bobGroupMember,
+            role: 'INVALID_ROLE',
+          })
       );
     });
 
@@ -446,26 +463,21 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member with admin role
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.ADMIN,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create another member - using bobContext instead of aliceContext
-      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-        groupId: 'group1',
-        userId: 'bob',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember);
 
       // Then update the member role
       await assertSucceeds(
         aliceContext.firestore().collection('groupMembers').doc('bob_group1').update({
           role: GroupMemberRole.MODERATOR,
-          updatedAt: Timestamp.now(),
+          groupId: 'group1',
+          userId: 'bob',
         })
       );
     });
@@ -483,26 +495,21 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member with admin role
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.ADMIN,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create another member - using bobContext instead of aliceContext
-      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-        groupId: 'group1',
-        userId: 'bob',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember);
 
       // Then try to update the member role
       await assertFails(
         bobContext.firestore().collection('groupMembers').doc('alice_group1').update({
           role: GroupMemberRole.MEMBER,
-          updatedAt: Timestamp.now(),
+          groupId: 'group1',
+          userId: 'alice',
         })
       );
     });
@@ -520,12 +527,7 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member - using bobContext instead of aliceContext
-      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-        groupId: 'group1',
-        userId: 'bob',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember);
 
       // Then delete the membership
       await assertSucceeds(
@@ -546,20 +548,14 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member with admin role
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.ADMIN,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create another member - using bobContext instead of aliceContext
-      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-        groupId: 'group1',
-        userId: 'bob',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember);
 
       // Then delete the member
       await assertSucceeds(
@@ -583,12 +579,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Then create a rating
       const today = new Date().toISOString().split('T')[0];
@@ -641,12 +636,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Then try to create a rating with invalid value
       const today = new Date().toISOString().split('T')[0];
@@ -674,12 +668,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Then try to create a rating with invalid date format
       await assertFails(
@@ -706,12 +699,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create a rating
       const today = new Date().toISOString().split('T')[0];
@@ -748,12 +740,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create a rating
       const today = new Date().toISOString().split('T')[0];
@@ -787,19 +778,12 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group members
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
-
-      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-        groupId: 'group1',
-        userId: 'bob',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
+      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember);
 
       // Create ratings
       const today = new Date().toISOString().split('T')[0];
@@ -841,19 +825,15 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group members
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MODERATOR,
-        joinedAt: Timestamp.now(),
-      });
-
-      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set({
-        groupId: 'group1',
-        userId: 'bob',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set({
+          ...aliceGroupMember,
+          role: GroupMemberRole.MODERATOR,
+        });
+      await bobContext.firestore().collection('groupMembers').doc('bob_group1').set(bobGroupMember);
 
       // Create ratings
       const today = new Date().toISOString().split('T')[0];
@@ -884,12 +864,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create a rating
       const today = new Date().toISOString().split('T')[0];
@@ -920,12 +899,11 @@ describe('Firebase Security Rules', () => {
         });
 
       // Create group member
-      await aliceContext.firestore().collection('groupMembers').doc('alice_group1').set({
-        groupId: 'group1',
-        userId: 'alice',
-        role: GroupMemberRole.MEMBER,
-        joinedAt: Timestamp.now(),
-      });
+      await aliceContext
+        .firestore()
+        .collection('groupMembers')
+        .doc('alice_group1')
+        .set(aliceGroupMember);
 
       // Create a rating for yesterday
       const yesterday = new Date();
