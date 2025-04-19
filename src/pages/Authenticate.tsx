@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
-import { createAuthError } from '@/utils/authErrors';
+import { createAuthError, isFirebaseError } from '@/utils/authErrors';
 import {
   Box,
   Button,
@@ -125,6 +125,17 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
     } catch (error) {
       const authError = createAuthError(error);
       setDialogError(authError.message);
+
+      // If the email is already in use by a different account, provide a more helpful message
+      if (
+        isFirebaseError(error) &&
+        (error.code === 'auth/email-already-in-use' ||
+          error.code === 'auth/credential-already-in-use')
+      ) {
+        setDialogError(
+          'This email is already registered with a different account. You cannot link it to your current account. Please use a different email or sign in with that account instead.'
+        );
+      }
     }
   };
 

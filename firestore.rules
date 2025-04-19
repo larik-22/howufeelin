@@ -2,102 +2,238 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+    // --- Helper Functions ---
+
+    // Checks if the user is authenticated
     function isAuthenticated() {
-      return request.auth != null && request.auth.uid != null;
+      return request.auth != null;
     }
-    
+
+    // Checks if the authenticated user is the owner of the resource
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    function isValidTimestamp(timestamp) {
-      return timestamp is timestamp && timestamp <= request.time;
+
+    // Checks if a timestamp is valid (is a timestamp and not in the future)
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
     }
-    
+
+    // --- User Data Validation ---
+
+    // Validates the data for a new user document
     function isValidNewUserData() {
       let data = request.resource.data;
-      
-      // All fields must be present for setDoc
-      let hasRequiredFields = 
-        data.userId != null &&
-        data.createdAt != null &&
-        data.updatedAt != null &&
-        data.displayName != null &&
-        data.email != null &&
-        data.username != null &&
-        data.photoURL != null;  // Can be null value, but field must exist
-      
-      // Validate field types
-      let validTypes = 
+
+      // Check for required fields
+      let hasRequiredFields =
         data.userId is string &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp &&
         data.displayName is string &&
         data.email is string &&
         data.username is string &&
-        (data.photoURL == null || data.photoURL is string);
-      
+        'photoURL' in data; // photoURL is optional but must be present if defined
+
       // Validate timestamps
-      let validTimestamps = 
+      let validTimestamps =
         isValidTimestamp(data.createdAt) &&
         isValidTimestamp(data.updatedAt) &&
-        data.updatedAt == data.createdAt;
-      
-      // Validate userId matches auth uid
+        data.createdAt == data.updatedAt; // Ensure createdAt and updatedAt are the same on creation
+
+      // Validate userId matches auth.uid
       let validUserId = data.userId == request.auth.uid;
-      
-      // No length validation for initial creation - fields can be empty
-      return hasRequiredFields && validTypes && validTimestamps && validUserId;
+
+      return hasRequiredFields && validTimestamps && validUserId;
     }
-    
+
+    // Validates the data for updating a user document
     function isValidUserUpdate() {
       let data = request.resource.data;
       let existingData = resource.data;
-      
-      // Ensure required fields are not removed
-      let requiredFields = ['userId', 'createdAt'];
-      let hasRequiredFields = requiredFields.all(field => data[field] != null);
-      
-      // Validate field types if they are being updated
-      let validTypes = 
-        (!('createdAt' in data) || data.createdAt is timestamp) &&
+
+      // Validate fields being updated
+      let isValidUpdate =
         (!('displayName' in data) || data.displayName is string) &&
         (!('email' in data) || data.email is string) &&
-        (!('updatedAt' in data) || data.updatedAt is timestamp) &&
-        (!('userId' in data) || data.userId is string) &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && isValidTimestamp(data.updatedAt) && data.updatedAt > existingData.updatedAt)) &&
         (!('username' in data) || data.username is string) &&
-        (!('photoURL' in data) || data.photoURL == null || data.photoURL is string);
-      
-      // Validate timestamps
-      let validTimestamps = 
-        (!('createdAt' in data) || data.createdAt == existingData.createdAt) &&  // createdAt should never change
-        (!('updatedAt' in data) || (isValidTimestamp(data.updatedAt) && data.updatedAt > existingData.updatedAt));
-      
-      // Validate string lengths and patterns if they are being updated
-      let validStrings = 
-        (!('displayName' in data) || (data.displayName.size() >= 2)) &&
-        (!('username' in data) || (data.username.size() >= 3 && data.username.size() <= 30));
-      
-      // Validate userId never changes
-      let validUserId = !('userId' in data) || data.userId == existingData.userId;
-      
-      return hasRequiredFields && validTypes && validTimestamps && validStrings && validUserId;
+        (!('photoURL' in data) || data.photoURL is string);
+
+      // Validate createdAt is unchanged
+      let createdAtUnchanged = !('createdAt' in data) || data.createdAt == existingData.createdAt;
+
+      // Validate userId is unchanged
+      let userIdUnchanged = !('userId' in data) || data.userId == existingData.userId;
+
+      return isValidUpdate && createdAtUnchanged && userIdUnchanged;
     }
-    
-    // Users collection rules
+
+    // --- Group Helper Functions ---
+
+    // Checks if a user is the creator of a group
+    function isGroupCreator(groupId) {
+      let groupDoc = get(/databases/$(database)/documents/groups/$(groupId));
+      return groupDoc.data.createdBy == request.auth.uid;
+    }
+
+    function isGroupAdmin(groupId) {
+      let groupMember = get(/databases/$(database)/documents/groupMembers/$(groupId + "_" + request.auth.uid));
+      return groupMember.data.role == 'admin';
+    }
+
+    // --- Group Data Validation ---
+
+    // Validates the data for creating a new group document
+    function isValidNewGroupData() {
+      let data = request.resource.data;
+
+      // Check for required fields
+      let hasRequiredFields =
+        data.groupName is string &&
+        data.groupDescription is string &&
+        data.createdBy is string &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.joinCode is string;
+
+      // Validate timestamps
+      let validTimestamps =
+        isValidTimestamp(data.createdAt) &&
+        isValidTimestamp(data.updatedAt) &&
+        data.createdAt == data.updatedAt; // Ensure createdAt and updatedAt are the same on creation
+
+      // Validate string lengths
+      let validStringLengths =
+        data.groupName.size() >= 3 && data.groupName.size() <= 50 &&
+        data.groupDescription.size() <= 500 &&
+        data.joinCode.size() == 6;
+
+      // Validate createdBy matches auth.uid
+      let validCreator = data.createdBy == request.auth.uid;
+
+      return hasRequiredFields && validTimestamps && validStringLengths && validCreator;
+    }
+
+    // Validates the data for updating a group document
+    function isValidGroupUpdate() {
+      let data = request.resource.data;
+      let existingData = resource.data;
+
+      // Validate fields being updated
+      let isValidUpdate =
+        (!('groupName' in data) || data.groupName is string) &&
+        (!('groupDescription' in data) || data.groupDescription is string) &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp && isValidTimestamp(data.updatedAt) && data.updatedAt > existingData.updatedAt)) &&
+        (!('joinCode' in data) || data.joinCode is string);
+
+      // Validate createdAt is unchanged
+      let createdAtUnchanged = !('createdAt' in data) || data.createdAt == existingData.createdAt;
+
+      // Validate createdBy is unchanged
+      let creatorUnchanged = !('createdBy' in data) || data.createdBy == existingData.createdBy;
+
+      return isValidUpdate && createdAtUnchanged && creatorUnchanged;
+    }
+
+    // Validates the data for creating a new group member document
+    function isValidNewGroupMemberData(groupId) {
+      let data = request.resource.data;
+
+      // Check for required fields
+      let hasRequiredFields =
+        data.groupId is string &&
+        data.userId is string &&
+        data.email is string &&
+        data.displayName is string &&
+        data.role is string &&
+        data.joinedAt is timestamp;
+
+      // Validate timestamps
+      let validTimestamps = isValidTimestamp(data.joinedAt);
+
+      // Validate role
+      let validRole = data.role in ['admin', 'member'];
+
+      // Validate userId matches auth.uid
+      let validUserId = data.userId == request.auth.uid;
+
+      return hasRequiredFields && validTimestamps && validRole && validUserId;
+    }
+
+    // Validates the data for updating a group member document
+    function isValidGroupMemberUpdate() {
+      let data = request.resource.data;
+      let existingData = resource.data;
+
+      // Validate fields being updated
+      let isValidUpdate =
+        (!('email' in data) || data.email is string) &&
+        (!('displayName' in data) || data.displayName is string) &&
+        (!('role' in data) || data.role in ['admin', 'member']);
+
+      // Validate userId is unchanged
+      let userIdUnchanged = !('userId' in data) || data.userId == existingData.userId;
+
+      // Validate groupId is unchanged
+      let groupIdUnchanged = !('groupId' in data) || data.groupId == existingData.groupId;
+
+      return isValidUpdate && userIdUnchanged && groupIdUnchanged;
+    }
+
+
+    // --- Collection Rules ---
+
+    // Rules for the 'users' collection
     match /users/{userId} {
       // Allow read if authenticated
       allow read: if isAuthenticated();
-      
+
       // Allow create if authenticated and data is valid
       allow create: if isAuthenticated() && isValidNewUserData();
-      
+
       // Allow update if owner and data is valid
       allow update: if isOwner(userId) && isValidUserUpdate();
-      
+
       // Allow delete if owner
       allow delete: if isOwner(userId);
+    }
+
+    // Rules for the 'groups' collection
+    match /groups/{groupId} {
+      // Allow read if authenticated
+      allow read: if isAuthenticated() 
+
+      // Allow create if authenticated and group data is valid
+      allow create: if 
+        (isAuthenticated() && isValidNewGroupData()) 
+        
+
+      // Allow update if user is an admin or the creator of the group and data is valid
+      allow update: if (isAuthenticated() && (isGroupAdmin(groupId) || isGroupCreator(groupId)) && isValidGroupUpdate())
+
+      // Allow delete if user is the creator of the group
+      allow delete: if (isAuthenticated() && isGroupCreator(groupId)) 
+    }
+
+    // Rules for the 'groupMembers' collection
+    match /groupMembers/{memberId} {
+      // Allow read if authenticated
+      allow read: if isAuthenticated() || debug("GroupMembers - Read denied: not authenticated");
+
+      // Allow create if authenticated and either:
+      // 1. User is creating their own membership and the group exists
+      // 2. User is the creator of the group and the group exists
+       allow create: if (isAuthenticated() &&
+        ((request.resource.data.userId == request.auth.uid && isValidNewGroupMemberData(request.resource.data.groupId) && exists(/databases/$(database)/documents/groups/$(request.resource.data.groupId)))
+        || (isGroupCreator(request.resource.data.groupId) && isValidNewGroupMemberData(request.resource.data.groupId) && exists(/databases/$(database)/documents/groups/$(request.resource.data.groupId)))))
+
+
+      // Allow update if user is an admin or the creator of the group and data is valid
+      allow update: if (isAuthenticated() && (isGroupAdmin(resource.data.groupId) || isGroupCreator(resource.data.groupId)) && isValidGroupMemberUpdate())|| debug("GroupMembers - Update denied: conditions not met");
+
+      // Allow delete if user is an admin or the creator of the group
+      allow delete: if (isAuthenticated() && (isGroupAdmin(resource.data.groupId) || isGroupCreator(resource.data.groupId)))|| debug("GroupMembers - Delete denied: conditions not met");
     }
   }
 }
