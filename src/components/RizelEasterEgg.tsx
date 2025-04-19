@@ -48,7 +48,7 @@ const messages = [
   "You're so slay 🎀",
   "You're beautiful 🌸",
   "You're incredible 🌟",
-  "You're smart as hell 🧠",
+  "You're so smart 🧠",
   "You're so kind...",
   "You're talented 🎨",
   "You're so sweet 🍬",
@@ -60,7 +60,10 @@ interface RizelEasterEggProps {
   onClose: () => void;
 }
 
-export default function RizelEasterEgg({ open, onClose }: RizelEasterEggProps) {
+export default function RizelEasterEgg({
+  open,
+}: //onClose,
+RizelEasterEggProps) {
   const theme = useTheme();
   const [currentMessage, setCurrentMessage] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
