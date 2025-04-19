@@ -6,9 +6,9 @@ import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
   signInWithPopup,
-  EmailAuthProvider,
-  linkWithCredential,
+  updatePassword,
 } from 'firebase/auth';
+import { Timestamp } from 'firebase/firestore';
 import { auth } from '@/firebase';
 import AuthContext from './authContext';
 import { AuthContextType } from '@/types/MyAuth';
@@ -89,14 +89,30 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   const linkEmailPassword = async (password: string) => {
-    if (!auth.currentUser?.email) {
-      throw new Error('No email available for linking');
+    if (!auth.currentUser) {
+      throw new Error('No user is signed in');
     }
 
-    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    const currentUser = auth.currentUser;
 
     await handleAuthOperation(async () => {
-      await linkWithCredential(auth.currentUser!, credential);
+      try {
+        console.log('Attempting to set password for existing user');
+
+        // Update the password for the current user
+        await updatePassword(currentUser, password);
+        console.log('Successfully set password for user');
+
+        // Update the user document in Firestore to reflect that the account now has a password
+        console.log('Updating user document in Firestore');
+        await userService.updateUser(currentUser.uid, {
+          updatedAt: Timestamp.now(),
+        });
+        console.log('Successfully updated user document');
+      } catch (error) {
+        console.error('Error in linkEmailPassword:', error);
+        throw error;
+      }
     });
   };
 

@@ -1,5 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 export interface Group {
   groupId: string;
