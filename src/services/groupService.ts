@@ -869,12 +869,11 @@ class FirestoreGroupService implements GroupService {
     };
   }
 
-  /*eslint-disable */
   async createRating(
     groupId: string,
-    userId: string,
-    rating: number,
-    note?: string
+    userId: string
+    //rating: number,
+    //note?: string
   ): Promise<void> {
     try {
       // Check if user is banned

@@ -96,6 +96,7 @@ export const canRemoveMember = (
 
 export const canBanMember = (
   currentUserRole: GroupMemberRole,
+  // @ts-expect-error - targetMemberRole is intentionally unused for now
   targetMemberRole: GroupMemberRole,
   isCurrentUser: boolean,
   isTargetUserAdmin: boolean
