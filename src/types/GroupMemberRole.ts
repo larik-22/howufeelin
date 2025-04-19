@@ -6,4 +6,5 @@ export enum GroupMemberRole {
   MEMBER = 'member',
   MODERATOR = 'moderator',
   ADMIN = 'admin',
+  BANNED = 'banned',
 }

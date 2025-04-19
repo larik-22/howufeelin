@@ -53,6 +53,7 @@ interface GroupService {
   subscribeToUserGroups(userId: string, callback: (groups: Group[]) => void): Unsubscribe;
   isSubscriptionActive(type: string, id: string): boolean;
   unsubscribeAll(): void;
+  createRating(groupId: string, userId: string, rating: number, note?: string): Promise<void>;
 }
 
 class FirestoreGroupService implements GroupService {
@@ -113,7 +114,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL,
+        photoURL: user.photoURL || undefined,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
@@ -271,7 +272,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL,
+        photoURL: user.photoURL || undefined,
       };
 
       // Use a batch to ensure atomicity
@@ -312,13 +313,40 @@ class FirestoreGroupService implements GroupService {
         throw new Error('User is not a member of this group');
       }
 
+      const memberData = memberDoc.data() as GroupMember;
+
+      // Prevent changing admin's role
+      if (memberData.role === GroupMemberRole.ADMIN) {
+        throw new Error('Cannot change admin role');
+      }
+
       // Use a batch to ensure atomicity
       const batch = writeBatch(db);
-      batch.update(doc(this.membersCollection, memberDocId), { role });
+      batch.update(doc(this.membersCollection, memberDocId), {
+        role,
+        updatedAt: serverTimestamp(),
+      });
       await batch.commit();
     } catch (error) {
       console.error('Error updating member role:', error);
       throw error;
+    }
+  }
+
+  private async checkBannedStatus(groupId: string, userId: string): Promise<boolean> {
+    try {
+      const memberDocId = `${groupId}_${userId}`;
+      const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+
+      if (memberDoc.exists()) {
+        const memberData = memberDoc.data() as GroupMember;
+        return memberData.role === GroupMemberRole.BANNED;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking banned status:', error);
+      return false;
     }
   }
 
@@ -422,6 +450,10 @@ class FirestoreGroupService implements GroupService {
       const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
 
       if (memberDoc.exists()) {
+        const memberData = memberDoc.data() as GroupMember;
+        if (memberData.role === GroupMemberRole.BANNED) {
+          throw new Error('You are banned from this group');
+        }
         throw new Error('Already a member of this group');
       }
 
@@ -433,7 +465,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL,
+        photoURL: user.photoURL || undefined,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
@@ -835,6 +867,27 @@ class FirestoreGroupService implements GroupService {
       unsubscribe();
       Object.values(groupSubscriptions).forEach(unsub => unsub());
     };
+  }
+
+  async createRating(
+    groupId: string,
+    userId: string,
+    rating: number,
+    note?: string
+  ): Promise<void> {
+    try {
+      // Check if user is banned
+      const isBanned = await this.checkBannedStatus(groupId, userId);
+      if (isBanned) {
+        throw new Error('You cannot rate in this group as you are banned');
+      }
+
+      // Continue with rating creation...
+      // ... existing rating creation code ...
+    } catch (error) {
+      console.error('Error creating rating:', error);
+      throw error;
+    }
   }
 }
 

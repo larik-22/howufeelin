@@ -2,6 +2,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   collection,
   query,
   where,
@@ -16,12 +17,15 @@ export interface UserService {
   createUser(user: MyUser): Promise<void>;
   updateUser(userId: string, data: Partial<MyUser>): Promise<void>;
   isUsernameTaken(username: string, excludeUserId?: string): Promise<boolean>;
-  createInitialUser(firebaseUser: {
-    uid: string;
-    email: string | null;
-    displayName: string | null;
-    photoURL: string | null;
-  }): Promise<MyUser>;
+  createInitialUser(
+    firebaseUser: {
+      uid: string;
+      email: string | null;
+      displayName: string | null;
+      photoURL: string | null;
+    },
+    username?: string
+  ): Promise<MyUser>;
 }
 
 class FirestoreUserService implements UserService {
@@ -32,21 +36,24 @@ class FirestoreUserService implements UserService {
     return userDoc.exists() ? (userDoc.data() as MyUser) : null;
   }
 
-  async createInitialUser(firebaseUser: {
-    uid: string;
-    email: string | null;
-    displayName: string | null;
-    photoURL: string | null;
-  }): Promise<MyUser> {
+  async createInitialUser(
+    firebaseUser: {
+      uid: string;
+      email: string | null;
+      displayName: string | null;
+      photoURL: string | null;
+    },
+    username?: string
+  ): Promise<MyUser> {
     const now = Timestamp.now();
-    const initialUsername = `user_${firebaseUser.uid.substring(0, 8)}`;
+    const initialUsername = username || `user_${firebaseUser.uid.substring(0, 8)}`;
 
     const initialUser: MyUser = {
       userId: firebaseUser.uid,
       username: initialUsername,
       email: firebaseUser.email || '',
       displayName: firebaseUser.displayName || initialUsername,
-      photoURL: firebaseUser.photoURL || undefined,
+      photoURL: firebaseUser.photoURL || null,
       createdAt: now,
       updatedAt: now,
     };
@@ -67,12 +74,28 @@ class FirestoreUserService implements UserService {
 
   async updateUser(userId: string, data: Partial<MyUser>): Promise<void> {
     const userRef = doc(this.usersCollection, userId);
+
+    // Get the current user data
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+
+    const currentData = userDoc.data() as MyUser;
+    const now = Timestamp.now();
+
+    // Ensure updatedAt is greater than the existing one
+    const updatedAt =
+      now > currentData.updatedAt
+        ? now
+        : new Timestamp(currentData.updatedAt.seconds + 1, currentData.updatedAt.nanoseconds);
+
     const updateData = {
       ...data,
-      updatedAt: Timestamp.now(),
+      updatedAt,
     };
 
-    await setDoc(userRef, updateData, { merge: true });
+    await updateDoc(userRef, updateData);
   }
 
   async isUsernameTaken(username: string, excludeUserId?: string): Promise<boolean> {

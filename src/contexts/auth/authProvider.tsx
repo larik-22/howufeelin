@@ -121,13 +121,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
       // Create user with provided username
-      const newUser = await userService.createInitialUser({
-        ...userCredential.user,
-        displayName: username,
-      });
-
-      // Update username after creation
-      await userService.updateUser(newUser.userId, { username });
+      const newUser = await userService.createInitialUser(
+        {
+          ...userCredential.user,
+          displayName: username,
+        },
+        username
+      );
 
       setMyUser(newUser);
       return userCredential;
