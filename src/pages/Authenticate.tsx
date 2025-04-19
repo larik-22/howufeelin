@@ -74,17 +74,20 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
         throw new Error('Failed to get user after Google sign in');
       }
 
-      if (userDoc.username) {
-        // User already has a username, only show password dialog
+      // Check if user has a custom username (not auto-generated)
+      const hasCustomUsername = userDoc.username && !userDoc.username.startsWith('user_');
+
+      if (hasCustomUsername) {
+        // User already has a custom username, only show password dialog
         setShowPasswordDialog(true);
         setDialogError('');
         setDialogStep('password');
       } else {
-        // No username set, show both steps
+        // Show username dialog for new users or those with auto-generated usernames
         setShowPasswordDialog(true);
         setDialogError('');
         setDialogStep('username');
-        // Generate a fallback username from email
+        // Pre-fill with a suggestion based on email
         const email = result.user.email;
         if (email) {
           const baseUsername = email.split('@')[0];

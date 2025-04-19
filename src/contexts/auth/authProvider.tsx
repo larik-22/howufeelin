@@ -6,11 +6,9 @@ import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
   signInWithPopup,
-  User as FirebaseUser,
   EmailAuthProvider,
   linkWithCredential,
 } from 'firebase/auth';
-import { Timestamp } from 'firebase/firestore';
 import { auth } from '@/firebase';
 import AuthContext from './authContext';
 import { AuthContextType } from '@/types/MyAuth';
@@ -68,9 +66,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     return await handleAuthOperation(async () => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      const userDoc = await createUserDocument(result.user);
-      setMyUser(userDoc);
-      return { result, userDoc };
+
+      // Check if user exists
+      const existingUser = await userService.getUserById(result.user.uid);
+      if (!existingUser) {
+        // Create initial user with auto-generated username
+        const newUser = await userService.createInitialUser(result.user);
+        setMyUser(newUser);
+        return { result, userDoc: newUser };
+      }
+
+      setMyUser(existingUser);
+      return { result, userDoc: existingUser };
     });
   };
 
@@ -79,26 +86,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       const result = await signInWithEmailAndPassword(auth, email, password);
       await fetchUserData(result.user.uid);
     });
-  };
-
-  const createUserDocument = async (firebaseUser: FirebaseUser, username?: string) => {
-    const existingUser = await userService.getUserById(firebaseUser.uid);
-
-    if (!existingUser) {
-      const newUser: MyUser = {
-        userId: firebaseUser.uid,
-        username: username || '',
-        email: firebaseUser.email || '',
-        displayName:
-          username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      };
-
-      await userService.createUser(newUser);
-      return newUser;
-    }
-    return existingUser;
   };
 
   const linkEmailPassword = async (password: string) => {
@@ -116,8 +103,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const signUp = async (email: string, password: string, username: string) => {
     await handleAuthOperation(async () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const userDoc = await createUserDocument(userCredential.user, username);
-      setMyUser(userDoc);
+
+      // Create user with provided username
+      const newUser = await userService.createInitialUser({
+        ...userCredential.user,
+        displayName: username,
+      });
+
+      // Update username after creation
+      await userService.updateUser(newUser.userId, { username });
+
+      setMyUser(newUser);
       return userCredential;
     });
   };
