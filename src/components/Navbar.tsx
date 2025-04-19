@@ -16,18 +16,23 @@ import {
   DialogActions,
   Button,
 } from '@mui/material';
+import FavoriteIcon from '@mui/icons-material/Favorite';
 import AuthContext from '@/contexts/auth/authContext';
+import { isRizel } from '@/utils/specialUsers';
+import RizelEasterEgg from './RizelEasterEgg';
 
 export default function Navbar() {
   const auth = useContext(AuthContext);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [openDialog, setOpenDialog] = useState(false);
+  const [heartExpanded, setHeartExpanded] = useState(false);
   const open = Boolean(anchorEl);
 
   if (!auth?.firebaseUser) return null;
 
   const userInitial = auth.myUser?.displayName?.[0]?.toUpperCase() || 'U';
   const userPhoto = auth.firebaseUser.photoURL;
+  const isRizelUser = isRizel(auth.firebaseUser.email);
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -69,7 +74,24 @@ export default function Navbar() {
             HowUFeel
           </Typography>
 
-          <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {isRizelUser && (
+              <Box sx={{ position: 'relative', mr: 2 }}>
+                <IconButton
+                  onClick={() => setHeartExpanded(!heartExpanded)}
+                  sx={{
+                    color: 'primary.main',
+                    '&:hover': {
+                      transform: 'scale(1.1)',
+                      transition: 'transform 0.2s',
+                    },
+                  }}
+                >
+                  <FavoriteIcon />
+                </IconButton>
+                <RizelEasterEgg open={heartExpanded} onClose={() => setHeartExpanded(false)} />
+              </Box>
+            )}
             <IconButton
               onClick={handleClick}
               size="small"

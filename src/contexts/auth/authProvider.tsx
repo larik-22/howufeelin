@@ -7,6 +7,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   updatePassword,
+  User,
 } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '@/firebase';
@@ -15,6 +16,17 @@ import { AuthContextType } from '@/types/MyAuth';
 import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
 import { userService } from '@/services/userService';
+import { simulateSpecialUser } from '@/utils/specialUsers';
+
+// Create a wrapper for the user object to allow email modification in development
+const createUserWrapper = (user: User | null): User | null => {
+  if (!user || process.env.NODE_ENV !== 'development') return user;
+
+  return {
+    ...user,
+    email: simulateSpecialUser(user.email || ''),
+  } as User;
+};
 
 type AuthOperation<T> = () => Promise<T>;
 
@@ -34,10 +46,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async user => {
-      setUser(user);
-      if (user) {
+      const wrappedUser = createUserWrapper(user);
+      setUser(wrappedUser);
+      if (wrappedUser) {
         if (!myUser) {
-          await fetchUserData(user.uid);
+          await fetchUserData(wrappedUser.uid);
         }
       } else {
         setMyUser(null);
