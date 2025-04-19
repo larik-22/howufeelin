@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "dotenv -e .env vite",
     "dev:emulator": "dotenv -e .env.development -- vite",
     "emulators": "firebase emulators:start",
     "dev:full": "concurrently \"npm run emulators\" \"npm run dev:emulator\"",
@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "jest",
-    "test:firebase-rules": "firebase emulators:exec --only firestore,auth 'dotenv -e .env.test -- jest tests/security-rules.firebase.test.ts'"
+    "test:rules": "firebase emulators:exec --only firestore,auth 'dotenv -e .env.test -- jest tests/security-rules.firebase.test.ts'"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
