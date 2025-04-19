@@ -10,13 +10,18 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { MyUser } from '@/types/MyUser';
-import { getAuth } from 'firebase/auth';
 
 export interface UserService {
   getUserById(userId: string): Promise<MyUser | null>;
   createUser(user: MyUser): Promise<void>;
   updateUser(userId: string, data: Partial<MyUser>): Promise<void>;
   isUsernameTaken(username: string, excludeUserId?: string): Promise<boolean>;
+  createInitialUser(firebaseUser: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+  }): Promise<MyUser>;
 }
 
 class FirestoreUserService implements UserService {
@@ -27,17 +32,34 @@ class FirestoreUserService implements UserService {
     return userDoc.exists() ? (userDoc.data() as MyUser) : null;
   }
 
-  async createUser(user: MyUser): Promise<void> {
-    // Get the current Firebase user to access photoURL
-    const auth = getAuth();
-    const firebaseUser = auth.currentUser;
+  async createInitialUser(firebaseUser: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+  }): Promise<MyUser> {
+    const now = Timestamp.now();
+    const initialUsername = `user_${firebaseUser.uid.substring(0, 8)}`;
 
-    // Create user data with photoURL from Firebase user if available
+    const initialUser: MyUser = {
+      userId: firebaseUser.uid,
+      username: initialUsername,
+      email: firebaseUser.email || '',
+      displayName: firebaseUser.displayName || initialUsername,
+      photoURL: firebaseUser.photoURL || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this.createUser(initialUser);
+    return initialUser;
+  }
+
+  async createUser(user: MyUser): Promise<void> {
     const userData = {
       ...user,
-      photoURL: firebaseUser?.photoURL || null,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
+      createdAt: user.createdAt || Timestamp.now(),
+      updatedAt: user.updatedAt || Timestamp.now(),
     };
 
     await setDoc(doc(this.usersCollection, user.userId), userData);
@@ -45,17 +67,8 @@ class FirestoreUserService implements UserService {
 
   async updateUser(userId: string, data: Partial<MyUser>): Promise<void> {
     const userRef = doc(this.usersCollection, userId);
-
-    // Get the current Firebase user to access photoURL if it's not provided in the update data
-    const auth = getAuth();
-    const firebaseUser = auth.currentUser;
-
-    // If photoURL is not provided in the update data but is available in Firebase user, use it
-    const photoURL = data.photoURL !== undefined ? data.photoURL : firebaseUser?.photoURL || null;
-
     const updateData = {
       ...data,
-      photoURL,
       updatedAt: Timestamp.now(),
     };
 
