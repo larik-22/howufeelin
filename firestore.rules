@@ -48,11 +48,39 @@ service cloud.firestore {
       return request.resource.data.role in ['member', 'moderator', 'admin'];
     }
     
+    function hasValidGroupMemberData() {
+      return request.resource.data.groupId is string &&
+             request.resource.data.userId is string &&
+             request.resource.data.userId == request.auth.uid &&
+             hasValidRole() &&
+             request.resource.data.joinedAt is timestamp;
+    }
+    
+    // User validation functions
+    function hasValidEmail() {
+      return request.resource.data.email is string && 
+             request.resource.data.email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$');
+    }
+    
+    function hasValidUsername() {
+      return request.resource.data.username is string && 
+             request.resource.data.username.size() >= 3;
+    }
+    
+    function hasValidUserData() {
+      return hasValidEmail() && 
+             hasValidUsername();
+    }
+    
+    function isNotChangingEmail() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']);
+    }
+    
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      allow create: if isOwner(userId) && hasValidUserData() && request.resource.data.userId == request.auth.uid;
+      allow update: if isOwner(userId) && isNotChangingEmail();
       allow delete: if false; // Users cannot delete their accounts
     }
     
@@ -89,22 +117,23 @@ service cloud.firestore {
       // Allow listing members if the user is authenticated
       allow list: if isAuthenticated();
       
-      // Allow creating a membership if it's for the authenticated user
+      // Allow creating a membership if it's for the authenticated user and has valid data
       allow create: if isAuthenticated() && 
-                     split(memberId, '_')[1] == request.auth.uid && 
-                     hasValidRole();
+                     memberId == request.auth.uid + '_' + request.resource.data.groupId &&
+                     hasValidGroupMemberData();
       
-      // Allow updating a membership if the user is an admin or if it's their own membership
-      // and they're not changing their role
+      // Allow updating a membership if the user is an admin of the group
+      // Note: Regular members can't update their own role
       allow update: if isAuthenticated() && 
-                     (isGroupAdmin(split(memberId, '_')[0]) || 
-                      (split(memberId, '_')[1] == request.auth.uid && 
-                       request.resource.data.role == resource.data.role));
+                     isGroupAdmin(resource.data.groupId) &&
+                     request.resource.data.groupId == resource.data.groupId &&
+                     request.resource.data.userId == resource.data.userId &&
+                     hasValidRole();
       
       // Allow deleting a membership if the user is an admin or if it's their own membership
       allow delete: if isAuthenticated() && 
-                     (isGroupAdmin(split(memberId, '_')[0]) || 
-                      split(memberId, '_')[1] == request.auth.uid);
+                     (isGroupAdmin(resource.data.groupId) || 
+                      resource.data.userId == request.auth.uid);
     }
     
     // Ratings collection
