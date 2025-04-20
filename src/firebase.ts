@@ -6,6 +6,7 @@ import {
   persistentMultipleTabManager,
   connectFirestoreEmulator,
 } from 'firebase/firestore';
+import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -20,6 +21,36 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+
+// Initialize Analytics with debug mode support
+let analytics: Analytics | null = null;
+const initAnalytics = async () => {
+  try {
+    // Check if analytics is supported in the current environment
+    const analyticsSupported = await isSupported();
+    const enableLocalAnalytics = import.meta.env.VITE_ENABLE_LOCAL_ANALYTICS === 'true';
+
+    if (analyticsSupported || enableLocalAnalytics) {
+      analytics = getAnalytics(app);
+      if (debugMode) {
+        console.log('Firebase Analytics initialized successfully');
+        if (enableLocalAnalytics) {
+          console.log('Local analytics debugging is enabled');
+        }
+      }
+    } else {
+      console.warn('Firebase Analytics is not supported in this environment');
+    }
+  } catch (error) {
+    console.error('Error initializing Firebase Analytics:', error);
+  }
+};
+
+// Initialize analytics
+initAnalytics();
+
+// Export analytics instance
+export { analytics };
 
 // Initialize Firestore with persistent local cache
 export const db = initializeFirestore(app, {
