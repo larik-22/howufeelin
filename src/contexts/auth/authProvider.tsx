@@ -6,9 +6,8 @@ import {
   signOut as firebaseSignOut,
   GoogleAuthProvider,
   signInWithPopup,
-  User as FirebaseUser,
-  EmailAuthProvider,
-  linkWithCredential,
+  updatePassword,
+  User,
 } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '@/firebase';
@@ -17,6 +16,17 @@ import { AuthContextType } from '@/types/MyAuth';
 import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
 import { userService } from '@/services/userService';
+import { simulateSpecialUser } from '@/utils/specialUsers';
+
+// Create a wrapper for the user object to allow email modification in development
+const createUserWrapper = (user: User | null): User | null => {
+  if (!user || process.env.NODE_ENV !== 'development') return user;
+
+  return {
+    ...user,
+    email: simulateSpecialUser(user.email || ''),
+  } as User;
+};
 
 type AuthOperation<T> = () => Promise<T>;
 
@@ -36,10 +46,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async user => {
-      setUser(user);
-      if (user) {
+      const wrappedUser = createUserWrapper(user);
+      setUser(wrappedUser);
+      if (wrappedUser) {
         if (!myUser) {
-          await fetchUserData(user.uid);
+          await fetchUserData(wrappedUser.uid);
         }
       } else {
         setMyUser(null);
@@ -68,9 +79,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     return await handleAuthOperation(async () => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      const userDoc = await createUserDocument(result.user);
-      setMyUser(userDoc);
-      return { result, userDoc };
+
+      // Check if user exists
+      const existingUser = await userService.getUserById(result.user.uid);
+      if (!existingUser) {
+        // Create initial user with auto-generated username
+        const newUser = await userService.createInitialUser(result.user);
+        setMyUser(newUser);
+        return { result, userDoc: newUser };
+      }
+
+      setMyUser(existingUser);
+      return { result, userDoc: existingUser };
     });
   };
 
@@ -81,43 +101,48 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     });
   };
 
-  const createUserDocument = async (firebaseUser: FirebaseUser, username?: string) => {
-    const existingUser = await userService.getUserById(firebaseUser.uid);
-
-    if (!existingUser) {
-      const newUser: MyUser = {
-        userId: firebaseUser.uid,
-        username: username || '',
-        email: firebaseUser.email || '',
-        displayName:
-          username || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      };
-
-      await userService.createUser(newUser);
-      return newUser;
-    }
-    return existingUser;
-  };
-
   const linkEmailPassword = async (password: string) => {
-    if (!auth.currentUser?.email) {
-      throw new Error('No email available for linking');
+    if (!auth.currentUser) {
+      throw new Error('No user is signed in');
     }
 
-    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    const currentUser = auth.currentUser;
 
     await handleAuthOperation(async () => {
-      await linkWithCredential(auth.currentUser!, credential);
+      try {
+        console.log('Attempting to set password for existing user');
+
+        // Update the password for the current user
+        await updatePassword(currentUser, password);
+        console.log('Successfully set password for user');
+
+        // Update the user document in Firestore to reflect that the account now has a password
+        console.log('Updating user document in Firestore');
+        await userService.updateUser(currentUser.uid, {
+          updatedAt: Timestamp.now(),
+        });
+        console.log('Successfully updated user document');
+      } catch (error) {
+        console.error('Error in linkEmailPassword:', error);
+        throw error;
+      }
     });
   };
 
   const signUp = async (email: string, password: string, username: string) => {
     await handleAuthOperation(async () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const userDoc = await createUserDocument(userCredential.user, username);
-      setMyUser(userDoc);
+
+      // Create user with provided username
+      const newUser = await userService.createInitialUser(
+        {
+          ...userCredential.user,
+          displayName: username,
+        },
+        username
+      );
+
+      setMyUser(newUser);
       return userCredential;
     });
   };

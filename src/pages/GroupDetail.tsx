@@ -18,7 +18,7 @@ import { groupService } from '@/services/groupService';
 import { ratingService, RatingError } from '@/services/ratingService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
-import { GroupMemberRole } from '@/services/groupService';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 import { Rating } from '@/types/Rating';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -124,14 +124,8 @@ export default function GroupDetail() {
           return { ...updatedGroup, userRole: prevGroup.userRole };
         });
       } else {
-        // Group was deleted
-        setNotification({
-          message: 'This group has been deleted',
-          type: 'info',
-        });
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
+        // Group was deleted or user was removed
+        navigate('/dashboard?error=not_member');
       }
     });
 
@@ -140,14 +134,26 @@ export default function GroupDetail() {
       setGroupMembers(updatedMembers);
       setMemberCount(updatedMembers.length);
 
-      // Update the current user's role if it has changed
+      // Check if current user is still a member
       const currentUserMember = updatedMembers.find(m => m.userId === auth.myUser?.userId);
-      if (currentUserMember) {
-        setGroup(prevGroup => {
-          if (!prevGroup) return prevGroup;
-          return { ...prevGroup, userRole: currentUserMember.role };
-        });
+
+      if (!currentUserMember) {
+        // User is no longer a member
+        navigate('/dashboard?error=not_member');
+        return;
       }
+
+      // Check if user is banned
+      if (currentUserMember.role === GroupMemberRole.BANNED) {
+        navigate('/dashboard?error=banned');
+        return;
+      }
+
+      // Update the current user's role if it has changed
+      setGroup(prevGroup => {
+        if (!prevGroup) return prevGroup;
+        return { ...prevGroup, userRole: currentUserMember.role };
+      });
     });
 
     // Clean up subscriptions when component unmounts

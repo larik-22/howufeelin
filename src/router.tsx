@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect, LoaderFunctionArgs } from 'react-router'
 import { lazy, Suspense } from 'react';
 import RootLayout from '@/layouts/RootLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import RizelProtectedRoute from '@/components/RizelProtectedRoute';
 import AuthRoute from '@/components/AuthRoute';
 import RootRedirect from '@/components/RootRedirect';
 import Loading from '@/components/Loading';
@@ -9,6 +10,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import DashboardBaseLayout from '@/layouts/DashboardBaseLayout';
 import { groupService } from '@/services/groupService';
 import { getAuth } from 'firebase/auth';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 // Lazy load pages
 const Authenticate = lazy(() =>
@@ -23,6 +25,9 @@ const GroupDetail = lazy(() =>
 );
 const NotFound = lazy(() =>
   import('@/pages/NotFound').then(module => ({ default: module.default }))
+);
+const RizelPage = lazy(() =>
+  import('@/pages/RizelPage').then(module => ({ default: module.default }))
 );
 
 export function hydrateFallback() {
@@ -78,6 +83,12 @@ async function validateGroupAndMembership(groupId: string, userId: string) {
       // This will throw an error if the user is not a member
       const groupDetailData = await groupService.getGroupDetailData(groupId, userId);
 
+      // Check if user is banned
+      if (groupDetailData.userRole === GroupMemberRole.BANNED) {
+        console.warn(`User ${userId} is banned from group ${groupId}`);
+        return redirect('/dashboard?error=banned');
+      }
+
       // If we get here, the user is a member of the group
       return {
         group: groupDetailData.group,
@@ -86,11 +97,12 @@ async function validateGroupAndMembership(groupId: string, userId: string) {
         userRole: groupDetailData.userRole,
       };
     } catch (error) {
+      // Check for specific error messages
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
       // User is not a member of the group, redirect to dashboard
       console.warn(
-        `User ${userId} attempted to access group ${groupId} but is not a member: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `User ${userId} attempted to access group ${groupId} but is not a member: ${errorMessage}`
       );
       return redirect('/dashboard?error=not_member');
     }
@@ -166,6 +178,16 @@ export const router = createBrowserRouter([
                   <Suspense fallback={<Loading isFullscreen />}>
                     <Test />
                   </Suspense>
+                ),
+              },
+              {
+                path: '/rizel',
+                element: (
+                  <RizelProtectedRoute>
+                    <Suspense fallback={<Loading isFullscreen />}>
+                      <RizelPage />
+                    </Suspense>
+                  </RizelProtectedRoute>
                 ),
               },
             ],

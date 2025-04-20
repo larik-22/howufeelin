@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
-import { createAuthError } from '@/utils/authErrors';
+import { createAuthError, isFirebaseError } from '@/utils/authErrors';
 import {
   Box,
   Button,
@@ -74,17 +74,20 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
         throw new Error('Failed to get user after Google sign in');
       }
 
-      if (userDoc.username) {
-        // User already has a username, only show password dialog
+      // Check if user has a custom username (not auto-generated)
+      const hasCustomUsername = userDoc.username && !userDoc.username.startsWith('user_');
+
+      if (hasCustomUsername) {
+        // User already has a custom username, only show password dialog
         setShowPasswordDialog(true);
         setDialogError('');
         setDialogStep('password');
       } else {
-        // No username set, show both steps
+        // Show username dialog for new users or those with auto-generated usernames
         setShowPasswordDialog(true);
         setDialogError('');
         setDialogStep('username');
-        // Generate a fallback username from email
+        // Pre-fill with a suggestion based on email
         const email = result.user.email;
         if (email) {
           const baseUsername = email.split('@')[0];
@@ -122,6 +125,17 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
     } catch (error) {
       const authError = createAuthError(error);
       setDialogError(authError.message);
+
+      // If the email is already in use by a different account, provide a more helpful message
+      if (
+        isFirebaseError(error) &&
+        (error.code === 'auth/email-already-in-use' ||
+          error.code === 'auth/credential-already-in-use')
+      ) {
+        setDialogError(
+          'This email is already registered with a different account. You cannot link it to your current account. Please use a different email or sign in with that account instead.'
+        );
+      }
     }
   };
 

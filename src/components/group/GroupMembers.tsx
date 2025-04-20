@@ -11,8 +11,8 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { GroupMemberRole } from '@/services/groupService';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
 
 interface Member {
   name: string;

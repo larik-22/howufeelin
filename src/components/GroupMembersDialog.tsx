@@ -26,13 +26,21 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import StarIcon from '@mui/icons-material/Star';
 import PersonIcon from '@mui/icons-material/Person';
+import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
-import { GroupMemberRole } from '@/services/groupService';
-import { getRoleColor, getRoleLabel, canManageMember, canRemoveMember } from '@/utils/roleUtils';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
+import {
+  getRoleColor,
+  getRoleLabel,
+  canManageMember,
+  canRemoveMember,
+  canBanMember,
+} from '@/utils/roleUtils';
 
 interface GroupMembersDialogProps {
   open: boolean;
@@ -132,7 +140,7 @@ export default function GroupMembersDialog({
       }
 
       setNotification({
-        message: `Role updated to ${newRole}`,
+        message: `Role updated to ${getRoleLabel(newRole)}`,
         type: 'success',
       });
 
@@ -143,6 +151,44 @@ export default function GroupMembersDialog({
         message: 'Failed to update member role',
         type: 'error',
       });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleBanMember = async (member: GroupMember) => {
+    if (!group) return;
+
+    try {
+      setIsUpdating(true);
+      setError(null);
+      await groupService.updateMemberRole(group.groupId, member.userId, GroupMemberRole.BANNED);
+      setSelectedMember(null);
+      setNotification({
+        message: `${member.displayName} has been banned from the group`,
+        type: 'success',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to ban member');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUnbanMember = async (member: GroupMember) => {
+    if (!group) return;
+
+    try {
+      setIsUpdating(true);
+      setError(null);
+      await groupService.updateMemberRole(group.groupId, member.userId, GroupMemberRole.MEMBER);
+      setSelectedMember(null);
+      setNotification({
+        message: `${member.displayName} has been unbanned from the group`,
+        type: 'success',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unban member');
     } finally {
       setIsUpdating(false);
     }
@@ -213,6 +259,7 @@ export default function GroupMembersDialog({
                       mb: 1,
                       border: isCurrentUser(member) ? '1px solid' : 'none',
                       borderColor: 'primary.light',
+                      opacity: member.role === GroupMemberRole.BANNED ? 0.6 : 1,
                     }}
                   >
                     <ListItemAvatar>
@@ -256,6 +303,8 @@ export default function GroupMembersDialog({
                             sx={{
                               fontWeight: isGroupCreator(member) ? 'bold' : 'normal',
                               color: isGroupCreator(member) ? 'primary.main' : 'text.primary',
+                              textDecoration:
+                                member.role === GroupMemberRole.BANNED ? 'line-through' : 'none',
                             }}
                           >
                             {member.displayName}
@@ -331,19 +380,60 @@ export default function GroupMembersDialog({
       </Dialog>
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-        {selectedMember && selectedMember.role !== GroupMemberRole.MODERATOR && (
-          <MenuItem
-            onClick={() => handleUpdateRole(GroupMemberRole.MODERATOR)}
-            disabled={isUpdating}
-          >
-            Make Moderator
-          </MenuItem>
-        )}
-        {selectedMember && selectedMember.role !== GroupMemberRole.MEMBER && (
-          <MenuItem onClick={() => handleUpdateRole(GroupMemberRole.MEMBER)} disabled={isUpdating}>
-            Make Member
-          </MenuItem>
-        )}
+        {selectedMember &&
+          selectedMember.role !== GroupMemberRole.MODERATOR &&
+          selectedMember.role !== GroupMemberRole.BANNED && (
+            <MenuItem
+              onClick={() => handleUpdateRole(GroupMemberRole.MODERATOR)}
+              disabled={isUpdating}
+            >
+              Make Moderator
+            </MenuItem>
+          )}
+        {selectedMember &&
+          selectedMember.role !== GroupMemberRole.MEMBER &&
+          selectedMember.role !== GroupMemberRole.BANNED && (
+            <MenuItem
+              onClick={() => handleUpdateRole(GroupMemberRole.MEMBER)}
+              disabled={isUpdating}
+            >
+              Make Member
+            </MenuItem>
+          )}
+        {selectedMember &&
+          canBanMember(
+            group.userRole || GroupMemberRole.MEMBER,
+            selectedMember.role || GroupMemberRole.MEMBER,
+            selectedMember.userId === user.userId,
+            selectedMember.role === GroupMemberRole.ADMIN
+          ) &&
+          selectedMember.role !== GroupMemberRole.BANNED && (
+            <MenuItem
+              onClick={() => handleBanMember(selectedMember)}
+              disabled={isUpdating}
+              sx={{ color: 'error.main' }}
+            >
+              <BlockIcon fontSize="small" sx={{ mr: 1 }} />
+              Ban from Group
+            </MenuItem>
+          )}
+        {selectedMember &&
+          selectedMember.role === GroupMemberRole.BANNED &&
+          canBanMember(
+            group.userRole || GroupMemberRole.MEMBER,
+            selectedMember.role || GroupMemberRole.MEMBER,
+            selectedMember.userId === user.userId,
+            false
+          ) && (
+            <MenuItem
+              onClick={() => handleUnbanMember(selectedMember)}
+              disabled={isUpdating}
+              sx={{ color: 'success.main' }}
+            >
+              <CheckCircleIcon fontSize="small" sx={{ mr: 1 }} />
+              Unban Member
+            </MenuItem>
+          )}
         {selectedMember &&
           canRemoveMember(
             group.userRole || GroupMemberRole.MEMBER,

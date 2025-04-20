@@ -1,29 +1,35 @@
 import { useContext, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
 import { Typography, Box, Paper, Alert, Snackbar, useTheme, useMediaQuery } from '@mui/material';
 import Groups from './Groups';
 
 export default function Dashboard() {
   const auth = useContext(AuthContext);
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [notification, setNotification] = useState<{
     message: string;
-    type: 'error' | 'info' | 'success';
+    severity: 'success' | 'error' | 'info' | 'warning';
   } | null>(null);
 
   useEffect(() => {
-    // Check for error parameter in URL
-    const error = searchParams.get('error');
+    const params = new URLSearchParams(location.search);
+    const error = params.get('error');
+
     if (error === 'not_member') {
       setNotification({
-        message: 'You are not a member of this group or have been removed from it.',
-        type: 'error',
+        message: 'You are not a member of this group',
+        severity: 'error',
+      });
+    } else if (error === 'banned') {
+      setNotification({
+        message: 'You have been banned from this group',
+        severity: 'error',
       });
     }
-  }, [searchParams]);
+  }, [location.search]);
 
   const handleCloseNotification = () => {
     setNotification(null);
@@ -83,7 +89,7 @@ export default function Dashboard() {
       >
         <Alert
           onClose={handleCloseNotification}
-          severity={notification?.type || 'info'}
+          severity={notification?.severity || 'info'}
           sx={{ width: '100%' }}
         >
           {notification?.message}
