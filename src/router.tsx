@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect, LoaderFunctionArgs } from 'react-router'
 import { lazy, Suspense } from 'react';
 import RootLayout from '@/layouts/RootLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import RizelProtectedRoute from '@/components/RizelProtectedRoute';
 import AuthRoute from '@/components/AuthRoute';
 import RootRedirect from '@/components/RootRedirect';
 import Loading from '@/components/Loading';
@@ -24,6 +25,9 @@ const GroupDetail = lazy(() =>
 );
 const NotFound = lazy(() =>
   import('@/pages/NotFound').then(module => ({ default: module.default }))
+);
+const RizelPage = lazy(() =>
+  import('@/pages/RizelPage').then(module => ({ default: module.default }))
 );
 
 export function hydrateFallback() {
@@ -174,6 +178,16 @@ export const router = createBrowserRouter([
                   <Suspense fallback={<Loading isFullscreen />}>
                     <Test />
                   </Suspense>
+                ),
+              },
+              {
+                path: '/rizel',
+                element: (
+                  <RizelProtectedRoute>
+                    <Suspense fallback={<Loading isFullscreen />}>
+                      <RizelPage />
+                    </Suspense>
+                  </RizelProtectedRoute>
                 ),
               },
             ],
