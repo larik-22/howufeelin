@@ -17,6 +17,7 @@ import { MyUser } from '@/types/MyUser';
 import { createAuthError, AuthError } from '@/utils/authErrors';
 import { userService } from '@/services/userService';
 import { simulateSpecialUser } from '@/utils/specialUsers';
+import { analyticsService } from '@/services/analyticsService';
 
 // Create a wrapper for the user object to allow email modification in development
 const createUserWrapper = (user: User | null): User | null => {
@@ -52,6 +53,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (!myUser) {
           await fetchUserData(wrappedUser.uid);
         }
+        // Track user return
+        const lastVisit = localStorage.getItem('lastVisit');
+        if (lastVisit) {
+          const daysSinceLastVisit = Math.floor(
+            (Date.now() - parseInt(lastVisit)) / (1000 * 60 * 60 * 24)
+          );
+          analyticsService.trackUserReturn(daysSinceLastVisit);
+        }
+        localStorage.setItem('lastVisit', Date.now().toString());
       } else {
         setMyUser(null);
       }
@@ -86,6 +96,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         // Create initial user with auto-generated username
         const newUser = await userService.createInitialUser(result.user);
         setMyUser(newUser);
+        analyticsService.trackUserSignup('google');
         return { result, userDoc: newUser };
       }
 
@@ -143,6 +154,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       );
 
       setMyUser(newUser);
+      analyticsService.trackUserSignup('email');
       return userCredential;
     });
   };

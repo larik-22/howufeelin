@@ -285,12 +285,19 @@ service cloud.firestore {
                    isGroupMember(request.resource.data.groupId) && 
                    !hasRatedToday(request.resource.data.groupId) && 
                    isValidNewRatingData();
+
+      allow delete: if isAuthenticated() && 
+                   isGroupMember(request.resource.data.groupId) && 
+                   hasRatedToday(request.resource.data.groupId);
     }
 
     // Rules for the 'groups' collection
     match /groups/{groupId} {
       // Allow read if authenticated and not banned from the group
       allow read: if isAuthenticated() && !isUserBanned(groupId);
+      
+      // Allow LIST operation for all authenticated users to check join code uniqueness
+      allow list: if isAuthenticated();
 
       // Allow create if authenticated and group data is valid
       allow create: if isAuthenticated() && isValidNewGroupData();

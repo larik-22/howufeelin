@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Rating, RATING_MIN, RATING_MAX, isValidRating, createRatingId } from '@/types/Rating';
+import { analyticsService } from '@/services/analyticsService';
 
 export class RatingError extends Error {
   constructor(message: string, public code: string) {
@@ -115,6 +116,7 @@ class FirestoreRatingService implements RatingService {
   private readonly MAX_RATINGS_PER_QUERY = 1000;
   private activeSubscriptions: Record<string, Unsubscribe> = {};
   private ratingsCollection = collection(db, this.COLLECTION);
+  private membersCollection = collection(db, 'groupMembers');
 
   /**
    * Get a document reference for a rating
@@ -227,18 +229,32 @@ class FirestoreRatingService implements RatingService {
     notes?: string
   ): Promise<Rating> {
     try {
-      this.validateRatingInput(ratingNumber, notes);
+      // Check if user is banned
+      const isBanned = await this.checkBannedStatus(groupId, userId);
+      if (isBanned) {
+        throw new RatingError('You cannot rate in this group as you are banned', 'BANNED');
+      }
 
-      const now = Timestamp.now();
+      // Validate rating number
+      if (ratingNumber < 1 || ratingNumber > 10) {
+        throw new RatingError('Rating must be between 1 and 10', 'INVALID_RATING');
+      }
+
+      // Validate notes length
+      if (notes && notes.length > 500) {
+        throw new RatingError('Notes must be less than 500 characters', 'INVALID_NOTES');
+      }
+
+      // Check if user has already rated today
+      const hasRated = await this.hasUserRatedToday(groupId, userId);
+      if (hasRated) {
+        throw new RatingError('You have already rated today', 'ALREADY_RATED');
+      }
+
+      // Create the rating
       const today = this.getTodayString();
       const ratingId = createRatingId(groupId, today, userId);
-      const ratingRef = this.getRatingDocRef(ratingId);
-
-      // Check if rating already exists
-      const existingRating = await getDoc(ratingRef);
-      if (existingRating.exists()) {
-        throw new RatingError('User has already rated today', 'ALREADY_RATED');
-      }
+      const now = Timestamp.now();
 
       const rating: Rating = {
         ratingId,
@@ -251,13 +267,17 @@ class FirestoreRatingService implements RatingService {
         updatedAt: now,
       };
 
-      await setDoc(ratingRef, rating);
+      await setDoc(doc(this.ratingsCollection, ratingId), rating);
+
+      // Track rating submission
+      analyticsService.trackRatingSubmit(groupId, ratingNumber);
+
       return rating;
     } catch (error) {
+      console.error('Error creating rating:', error);
       if (error instanceof RatingError) {
         throw error;
       }
-      console.error('Error creating rating:', error);
       throw new RatingError('Failed to create rating', 'CREATE_FAILED');
     }
   }
@@ -624,6 +644,23 @@ class FirestoreRatingService implements RatingService {
     this.activeSubscriptions[subscriptionId] = unsubscribe;
 
     return unsubscribe;
+  }
+
+  private async checkBannedStatus(groupId: string, userId: string): Promise<boolean> {
+    try {
+      const memberDocId = `${groupId}_${userId}`;
+      const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
+
+      if (!memberDoc.exists()) {
+        return false;
+      }
+
+      const memberData = memberDoc.data();
+      return memberData.role === 'banned';
+    } catch (error) {
+      console.error('Error checking banned status:', error);
+      return false;
+    }
   }
 }
 

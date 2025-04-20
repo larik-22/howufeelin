@@ -19,6 +19,7 @@ import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
 import { ratingService } from '@/services/ratingService';
 import { GroupMemberRole } from '@/types/GroupMemberRole';
+import { analyticsService } from '@/services/analyticsService';
 
 interface GroupService {
   createGroup(name: string, description: string, user: MyUser): Promise<Group>;
@@ -114,10 +115,13 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || null,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
+
+      // Track group creation
+      analyticsService.trackGroupCreate(groupId);
 
       return {
         ...group,
@@ -272,7 +276,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || null,
       };
 
       // Use a batch to ensure atomicity
@@ -427,54 +431,46 @@ class FirestoreGroupService implements GroupService {
 
   async joinGroup(joinCode: string, user: MyUser): Promise<Group> {
     try {
-      // First, find the group by join code
-      const groupsRef = collection(db, 'groups');
-      const q = query(groupsRef, where('joinCode', '==', joinCode));
+      // Find the group with the given join code
+      const q = query(this.groupsCollection, where('joinCode', '==', joinCode));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        throw new Error('Group not found');
+        throw new Error('Invalid join code');
       }
 
       const groupDoc = querySnapshot.docs[0];
-      const groupId = groupDoc.id;
-      const groupData = groupDoc.data() as Group;
+      const group = groupDoc.data() as Group;
 
-      // Check if user is trying to join their own group
-      if (groupData.createdBy === user.userId) {
-        throw new Error('You cannot join your own group');
-      }
-
-      // Check if user is already a member using the members collection
-      const memberDocId = `${groupId}_${user.userId}`;
+      // Check if user is already a member
+      const memberDocId = `${group.groupId}_${user.userId}`;
       const memberDoc = await getDoc(doc(this.membersCollection, memberDocId));
 
       if (memberDoc.exists()) {
         const memberData = memberDoc.data() as GroupMember;
-        if (memberData.role === GroupMemberRole.BANNED) {
-          throw new Error('You are banned from this group');
+        if (memberData.role === 'banned') {
+          throw new Error('You have been banned from this group');
         }
-        throw new Error('Already a member of this group');
+        return { ...group, userRole: memberData.role };
       }
 
-      // Add user to group members with a single write operation
+      // Add user as a member
       const member: GroupMember = {
-        groupId,
+        groupId: group.groupId,
         userId: user.userId,
         email: user.email,
         displayName: user.displayName,
         role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || null,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
 
-      // Return the group with the user role
-      return {
-        ...groupData,
-        userRole: GroupMemberRole.MEMBER,
-      };
+      // Track group join
+      analyticsService.trackGroupJoin(group.groupId);
+
+      return { ...group, userRole: GroupMemberRole.MEMBER };
     } catch (error) {
       console.error('Error joining group:', error);
       throw error;

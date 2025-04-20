@@ -282,7 +282,7 @@ export default function GroupMembersDialog({
                         }
                       >
                         <Avatar
-                          src={member.photoURL}
+                          src={member.photoURL || undefined}
                           alt={member.displayName}
                           sx={{
                             border: isGroupCreator(member) ? '2px solid' : 'none',
