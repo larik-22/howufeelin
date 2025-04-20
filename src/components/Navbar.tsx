@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  Tooltip,
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import AuthContext from '@/contexts/auth/authContext';
@@ -77,18 +78,20 @@ export default function Navbar() {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {isRizelUser && (
               <Box sx={{ position: 'relative', mr: 2 }}>
-                <IconButton
-                  onClick={() => setHeartExpanded(!heartExpanded)}
-                  sx={{
-                    color: 'primary.main',
-                    '&:hover': {
-                      transform: 'scale(1.1)',
-                      transition: 'transform 0.2s',
-                    },
-                  }}
-                >
-                  <FavoriteIcon />
-                </IconButton>
+                <Tooltip title="Click for a surprise!">
+                  <IconButton
+                    onClick={() => setHeartExpanded(!heartExpanded)}
+                    sx={{
+                      color: 'primary.main',
+                      '&:hover': {
+                        transform: 'scale(1.1)',
+                        transition: 'transform 0.2s',
+                      },
+                    }}
+                  >
+                    <FavoriteIcon />
+                  </IconButton>
+                </Tooltip>
                 <RizelEasterEgg open={heartExpanded} onClose={() => setHeartExpanded(false)} />
               </Box>
             )}

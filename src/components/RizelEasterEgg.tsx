@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Box, Paper, Typography, IconButton, Fade, Zoom, keyframes, styled } from '@mui/material';
+import {
+  Box,
+  Paper,
+  Typography,
+  IconButton,
+  Fade,
+  Zoom,
+  keyframes,
+  styled,
+  Button,
+} from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import StarIcon from '@mui/icons-material/Star';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import { useTheme } from '@mui/material/styles';
 import confetti from 'canvas-confetti';
-
+import { Link } from 'react-router';
 // Cute floating animation
 const float = keyframes`
   0% { transform: translateY(0px) rotate(0deg); }
@@ -60,10 +70,7 @@ interface RizelEasterEggProps {
   onClose: () => void;
 }
 
-export default function RizelEasterEgg({
-  open,
-}: //onClose,
-RizelEasterEggProps) {
+export default function RizelEasterEgg({ open, onClose }: RizelEasterEggProps) {
   const theme = useTheme();
   const [currentMessage, setCurrentMessage] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -125,8 +132,8 @@ RizelEasterEggProps) {
           minWidth: 250,
           maxWidth: 300,
           borderRadius: 4,
-          background: `linear-gradient(135deg, ${theme.palette.primary.light}20, ${theme.palette.primary.main}10)`,
-          backdropFilter: 'blur(10px)',
+          background: `linear-gradient(135deg, ${theme.palette.primary.light}10, ${theme.palette.primary.main}20)`,
+          backdropFilter: 'blur(20px)',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
           zIndex: 1000,
           overflow: 'hidden',
@@ -161,10 +168,33 @@ RizelEasterEggProps) {
               sx={{
                 color: theme.palette.text.secondary,
                 fontStyle: 'italic',
+                mb: 2,
               }}
             >
               You will defeat them all 💪
             </Typography>
+
+            {/* Special page link */}
+            <Button
+              component={Link}
+              to="/rizel"
+              variant="contained"
+              color="primary"
+              size="small"
+              onClick={onClose}
+              sx={{
+                borderRadius: 20,
+                textTransform: 'none',
+                fontWeight: 600,
+                boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                '&:hover': {
+                  transform: 'scale(1.05)',
+                  transition: 'transform 0.2s',
+                },
+              }}
+            >
+              Visit me 🥕
+            </Button>
           </Box>
 
           {/* Confetti effect */}
