@@ -166,7 +166,7 @@ export const GroupDetails = ({
                   <Avatar
                     key={index}
                     alt={member.displayName}
-                    src={member.photoURL}
+                    src={member.photoURL || undefined}
                     sx={{ bgcolor: 'primary.main' }}
                   >
                     {userInitial}

@@ -114,7 +114,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role: GroupMemberRole.ADMIN,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || null,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
@@ -272,7 +272,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || null,
       };
 
       // Use a batch to ensure atomicity
@@ -465,7 +465,7 @@ class FirestoreGroupService implements GroupService {
         displayName: user.displayName,
         role: GroupMemberRole.MEMBER,
         joinedAt: Timestamp.now(),
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || null,
       };
 
       await setDoc(doc(this.membersCollection, memberDocId), member);
