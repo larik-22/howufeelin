@@ -11,6 +11,8 @@ import '@fontsource/playfair-display/500.css';
 const cuteWords = [
   'So slay...',
   'So kind',
+  'So beautiful',
+  'So pretty',
   'So amazing',
   'So talented',
   'So smart',
@@ -37,7 +39,7 @@ const cuteWords = [
   'So creative',
   'So brilliant',
   'So generous',
-  'So lovely',
+  'So gorgeous',
   'So radiant',
   'So iconic',
   'So legendary',
@@ -56,7 +58,6 @@ const cuteWords = [
   'So passionate',
   'So extraordinary',
   'So warm',
-  'So lovable',
 ];
 
 interface WordItem {
@@ -238,11 +239,50 @@ export default function RizelPage() {
           position: 'relative',
         }}
       >
-        {/* Floating Heart */}
+        {/* Floating Hearts */}
         <motion.div
           style={{ position: 'absolute', top: '15%', left: '80%', fontSize: '6rem', opacity: 0.08 }}
           animate={{ y: [0, 30, 0], rotate: [0, 15, -15, 0] }}
           transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Typography component="span">❤️</Typography>
+        </motion.div>
+
+        {/* Additional Floating Hearts */}
+        <motion.div
+          style={{ position: 'absolute', top: '25%', left: '15%', fontSize: '4rem', opacity: 0.1 }}
+          animate={{ y: [0, -20, 0], rotate: [0, -10, 10, 0] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Typography component="span">❤️</Typography>
+        </motion.div>
+
+        <motion.div
+          style={{ position: 'absolute', top: '60%', left: '70%', fontSize: '3rem', opacity: 0.12 }}
+          animate={{ y: [0, 15, -15, 0], rotate: [0, 5, -5, 0] }}
+          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Typography component="span">❤️</Typography>
+        </motion.div>
+
+        <motion.div
+          style={{ position: 'absolute', top: '40%', left: '30%', fontSize: '5rem', opacity: 0.09 }}
+          animate={{ y: [0, -25, 25, 0], rotate: [0, 8, -8, 0] }}
+          transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Typography component="span">❤️</Typography>
+        </motion.div>
+
+        <motion.div
+          style={{
+            position: 'absolute',
+            top: '70%',
+            left: '20%',
+            fontSize: '3.5rem',
+            opacity: 0.11,
+          }}
+          animate={{ y: [0, 10, -10, 0], rotate: [0, -12, 12, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
         >
           <Typography component="span">❤️</Typography>
         </motion.div>
@@ -267,7 +307,7 @@ export default function RizelPage() {
               textShadow: '0 6px 30px rgba(0,0,0,0.1)',
             }}
           >
-            You are...
+            You are ...
           </Typography>
         </motion.div>
 
@@ -291,12 +331,26 @@ export default function RizelPage() {
             Scroll
             <motion.span
               initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8, duration: 0.5 }}
+              animate={{
+                opacity: 1,
+                y: [0, 15, 0],
+              }}
+              transition={{
+                delay: 0.8,
+                duration: 0.5,
+                y: {
+                  duration: 1.5,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                },
+              }}
               style={{
                 display: 'block',
-                fontSize: '2.5rem',
+                fontSize: '3rem',
                 color: theme.palette.primary.main,
+                fontWeight: 'bold',
+                textShadow: `0 0 10px ${theme.palette.primary.light}`,
+                marginTop: '0.5rem',
               }}
             >
               ↓
