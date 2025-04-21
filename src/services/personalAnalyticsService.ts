@@ -1,15 +1,4 @@
-import {
-  Timestamp,
-  Unsubscribe,
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  getDocs,
-  doc,
-  setDoc,
-} from 'firebase/firestore';
+import { Timestamp, Unsubscribe, doc, setDoc } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { ratingService } from './ratingService';
 import { groupService } from './groupService';
@@ -104,6 +93,7 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   private readonly ANALYTICS_COLLECTION = 'analytics_snapshots';
   private batchUpdateTimeout: NodeJS.Timeout | null = null;
   private pendingUpdates: Set<string> = new Set();
+  private ratingsSubscription: Unsubscribe | null = null;
 
   private generateSubscriptionId(type: string, id: string): string {
     return `${type}_${id}`;
@@ -221,54 +211,55 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
 
   async getMoodInsights(userId: string, dateRange: DateRangeFilter): Promise<MoodInsights> {
     try {
+      console.log('Getting mood insights for user:', userId);
+      console.log('Date range:', dateRange);
+
       const cacheKey = this.getCacheKey(userId, null, dateRange);
+      console.log('Cache key:', cacheKey);
 
       // Try to get from cache first
       const cachedInsights = this.getInsightsFromCache(cacheKey);
       if (cachedInsights) {
+        console.log('Returning cached insights');
         return cachedInsights;
       }
 
-      // Try to get from analytics snapshots
-      const snapshotRef = collection(db, this.ANALYTICS_COLLECTION);
-      const snapshotQuery = query(
-        snapshotRef,
-        where('userId', '==', userId),
-        where('groupId', '==', null),
-        where('dateRange.startDate', '==', dateRange.startDate),
-        where('dateRange.endDate', '==', dateRange.endDate)
-      );
+      // Get all groups the user is a member of
+      const groups = await this.getUserGroups(userId);
+      console.log('User groups:', groups);
 
-      const snapshot = await getDocs(snapshotQuery);
-      if (!snapshot.empty) {
-        const data = snapshot.docs[0].data();
-        const insights = data.insights as MoodInsights;
-        this.setInsightsCache(cacheKey, insights);
-        return insights;
+      if (groups.length === 0) {
+        console.log('No groups found for user');
+        return this.getEmptyInsights();
       }
 
-      // If not in cache or snapshots, calculate from ratings
-      const groups = await this.getUserGroups(userId);
+      // Get all ratings for the user across all groups
       const allRatings: Rating[] = [];
 
       // Use Promise.all to fetch ratings from all groups in parallel
-      const ratingPromises = groups.map(group =>
-        ratingService.getUserRatingsForDateRange(
+      const ratingPromises = groups.map(group => {
+        console.log(`Fetching ratings for group ${group.groupId}`);
+        return ratingService.getUserRatingsForDateRange(
           group.groupId,
           userId,
           dateRange.startDate,
           dateRange.endDate
-        )
-      );
+        );
+      });
 
       const groupRatings = await Promise.all(ratingPromises);
-      groupRatings.forEach(ratings => allRatings.push(...ratings));
+      groupRatings.forEach((ratings, index) => {
+        console.log(`Group ${groups[index].groupId} returned ${ratings.length} ratings`);
+        allRatings.push(...ratings);
+      });
+
+      console.log(`Total ratings found: ${allRatings.length}`);
+      if (allRatings.length > 0) {
+        console.log('Sample rating:', allRatings[0]);
+      }
 
       const insights = this.calculateMoodInsights(allRatings);
       this.setInsightsCache(cacheKey, insights);
-
-      // Schedule batch update of analytics snapshot
-      this.scheduleBatchUpdate(userId, null, dateRange);
 
       return insights;
     } catch (error) {
@@ -385,43 +376,64 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
     callback: (insights: MoodInsights) => void
   ): Unsubscribe {
     const subscriptionId = this.generateSubscriptionId('moodInsights', userId);
+    console.log(`Setting up mood insights subscription for user ${userId}`);
 
     // Unsubscribe from any existing subscription
     this.unsubscribe(subscriptionId);
 
-    // Set up real-time listener for analytics snapshots
-    const snapshotRef = collection(db, this.ANALYTICS_COLLECTION);
-    const snapshotQuery = query(
-      snapshotRef,
-      where('userId', '==', userId),
-      where('groupId', '==', null),
-      where('dateRange.startDate', '==', dateRange.startDate),
-      where('dateRange.endDate', '==', dateRange.endDate),
-      orderBy('lastUpdated', 'desc')
-    );
+    // First, get the initial data
+    this.getMoodInsights(userId, dateRange)
+      .then(insights => {
+        console.log('Initial mood insights fetched:', insights);
+        callback(insights);
+      })
+      .catch(error => {
+        console.error('Error getting initial mood insights:', error);
+        callback(this.getEmptyInsights());
+      });
 
-    const unsubscribe = onSnapshot(
-      snapshotQuery,
-      snapshot => {
-        if (!snapshot.empty) {
-          const data = snapshot.docs[0].data();
-          const insights = data.insights as MoodInsights;
-          const cacheKey = this.getCacheKey(userId, null, dateRange);
-          this.setInsightsCache(cacheKey, insights);
-          callback(insights);
-        } else {
-          // If no snapshot exists, fetch and calculate insights
-          this.getMoodInsights(userId, dateRange).then(callback);
-        }
-      },
-      error => {
-        console.error('Error in mood insights subscription:', error);
-        // Fallback to regular fetch
-        this.getMoodInsights(userId, dateRange).then(callback);
+    // Set up a subscription to user groups
+    const groupsUnsubscribe = groupService.subscribeToUserGroups(userId, async groups => {
+      console.log(`Groups update received for user ${userId}:`, groups);
+
+      if (groups.length === 0) {
+        console.log('No groups found, returning empty insights');
+        callback(this.getEmptyInsights());
+        return;
       }
-    );
 
-    this.activeSubscriptions[subscriptionId] = unsubscribe;
+      try {
+        // Get all ratings for the user across all groups
+        const allRatings: Rating[] = [];
+        const ratingPromises = groups.map(group =>
+          ratingService.getUserRatingsForDateRange(
+            group.groupId,
+            userId,
+            dateRange.startDate,
+            dateRange.endDate
+          )
+        );
+
+        const groupRatings = await Promise.all(ratingPromises);
+        groupRatings.forEach(ratings => allRatings.push(...ratings));
+
+        console.log(`Fetched ${allRatings.length} ratings for user ${userId}`);
+        const insights = this.calculateMoodInsights(allRatings);
+        const cacheKey = this.getCacheKey(userId, null, dateRange);
+        this.setInsightsCache(cacheKey, insights);
+        callback(insights);
+      } catch (error) {
+        console.error('Error updating mood insights:', error);
+        callback(this.getEmptyInsights());
+      }
+    });
+
+    // Store the unsubscribe function
+    this.activeSubscriptions[subscriptionId] = () => {
+      console.log(`Cleaning up subscription ${subscriptionId}`);
+      groupsUnsubscribe();
+    };
+
     return () => this.unsubscribe(subscriptionId);
   }
 
@@ -733,10 +745,10 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
 
   private async getUserGroups(userId: string): Promise<{ groupId: string }[]> {
     try {
-      // Get all groups the user is a member of using the groupService
+      // Use the groupService to get all groups the user is a member of
       const groups = await groupService.getUserGroups(userId);
 
-      // Map to the expected format
+      // Map the groups to the expected format
       return groups.map(group => ({ groupId: group.groupId }));
     } catch (error) {
       console.error('Error getting user groups:', error);

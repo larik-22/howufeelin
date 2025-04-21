@@ -9,7 +9,7 @@ import {
   Skeleton,
   Paper,
 } from '@mui/material';
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import MoodInsightsCard from '@/components/analytics/MoodInsightsCard';
 import MoodTrendChart from '@/components/analytics/MoodTrendChart';
 import DayOfWeekChart from '@/components/analytics/DayOfWeekChart';
@@ -26,42 +26,46 @@ export default function Analytics() {
   const [insights, setInsights] = useState<MoodInsights | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
+  const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
+
+  // Memoize the date range calculation to prevent unnecessary recalculations
+  const getDateRange = useCallback(() => {
+    return personalAnalyticsService.getDateRangeForTimeRange(timeRange);
+  }, [timeRange]);
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
+    // Clean up previous subscription if it exists
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
 
-    const setupSubscription = async () => {
-      if (!auth?.myUser) return;
+    if (!auth?.myUser?.userId) {
+      setLoading(false);
+      return;
+    }
 
-      try {
-        setLoading(true);
-        const dateRange = personalAnalyticsService.getDateRangeForTimeRange(timeRange);
+    setLoading(true);
+    const dateRange = getDateRange();
 
-        // Set up subscription to mood insights
-        unsubscribe = personalAnalyticsService.subscribeToMoodInsights(
-          auth.myUser.userId,
-          dateRange,
-          newInsights => {
-            setInsights(newInsights);
-            setLoading(false);
-          }
-        );
-      } catch (error) {
-        console.error('Error setting up mood insights subscription:', error);
+    // Set up subscription for updates
+    unsubscribeRef.current = personalAnalyticsService.subscribeToMoodInsights(
+      auth.myUser.userId,
+      dateRange,
+      newInsights => {
+        setInsights(newInsights);
         setLoading(false);
       }
-    };
+    );
 
-    setupSubscription();
-
-    // Cleanup subscription on unmount or when dependencies change
+    // Cleanup function
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
       }
     };
-  }, [auth?.myUser, timeRange]);
+  }, [auth?.myUser?.userId, timeRange, getDateRange]);
 
+  // Handle time range changes
   const handleTimeRangeChange = (
     event: React.MouseEvent<HTMLElement>,
     newTimeRange: TimeRange | null
