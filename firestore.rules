@@ -286,9 +286,12 @@ service cloud.firestore {
                    !hasRatedToday(request.resource.data.groupId) && 
                    isValidNewRatingData();
 
+      // Allow delete if:
+      // 1. User is the owner of the rating, OR
+      // 2. User is the owner of the group
       allow delete: if isAuthenticated() && 
-                   isGroupMember(request.resource.data.groupId) && 
-                   hasRatedToday(request.resource.data.groupId);
+                   (resource.data.userId == request.auth.uid || 
+                    isGroupCreator(resource.data.groupId));
     }
 
     // Rules for the 'groups' collection

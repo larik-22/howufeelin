@@ -29,6 +29,9 @@ const NotFound = lazy(() =>
 const RizelPage = lazy(() =>
   import('@/pages/RizelPage').then(module => ({ default: module.default }))
 );
+const Analytics = lazy(() =>
+  import('@/pages/Analytics').then(module => ({ default: module.default }))
+);
 
 export function hydrateFallback() {
   return <Loading isFullscreen />;
@@ -160,6 +163,14 @@ export const router = createBrowserRouter([
                 element: (
                   <Suspense fallback={<Loading isFullscreen />}>
                     <Dashboard />
+                  </Suspense>
+                ),
+              },
+              {
+                path: '/analytics',
+                element: (
+                  <Suspense fallback={<Loading isFullscreen />}>
+                    <Analytics />
                   </Suspense>
                 ),
               },
