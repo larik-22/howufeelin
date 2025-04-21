@@ -1,7 +1,7 @@
 import { useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
-import { createAuthError, isFirebaseError } from '@/utils/authErrors';
+import { createAuthError } from '@/utils/authErrors';
 import {
   Box,
   Button,
@@ -32,6 +32,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
   const auth = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+  const from = location.state?.from?.pathname || '/dashboard';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -59,6 +60,7 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
       } else {
         await auth.signInWithEmail(email, password);
       }
+      navigate(from, { replace: true });
     } catch (error) {
       const authError = createAuthError(error);
       setError(authError.message);
@@ -103,10 +105,6 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
 
   const handleSetUsername = async () => {
     try {
-      if (!googleUsername.trim()) {
-        setDialogError('Username is required');
-        return;
-      }
       await auth.updateUsername(googleUsername);
       setDialogStep('password');
       setDialogError('');
@@ -120,22 +118,10 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
     try {
       await auth.linkEmailPassword(linkPassword);
       setShowPasswordDialog(false);
-      setLinkPassword('');
-      setDialogError('');
+      navigate(from, { replace: true });
     } catch (error) {
       const authError = createAuthError(error);
       setDialogError(authError.message);
-
-      // If the email is already in use by a different account, provide a more helpful message
-      if (
-        isFirebaseError(error) &&
-        (error.code === 'auth/email-already-in-use' ||
-          error.code === 'auth/credential-already-in-use')
-      ) {
-        setDialogError(
-          'This email is already registered with a different account. You cannot link it to your current account. Please use a different email or sign in with that account instead.'
-        );
-      }
     }
   };
 
