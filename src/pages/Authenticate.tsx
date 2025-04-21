@@ -117,7 +117,9 @@ export default function Authenticate({ isRegister: initialIsRegister = false }: 
   const handleLinkPassword = async () => {
     try {
       await auth.linkEmailPassword(linkPassword);
+      console.log('Password linked successfully, navigating to:', from);
       setShowPasswordDialog(false);
+      // Navigate directly without using a timeout
       navigate(from, { replace: true });
     } catch (error) {
       const authError = createAuthError(error);

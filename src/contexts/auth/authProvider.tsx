@@ -133,6 +133,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           updatedAt: Timestamp.now(),
         });
         console.log('Successfully updated user document');
+
+        // Force a refresh of the auth state to ensure the provider data is updated
+        await currentUser.reload();
+        console.log('Auth state refreshed after password linking');
+
+        // Update the local user state to reflect the changes
+        setUser(createUserWrapper(auth.currentUser));
       } catch (error) {
         console.error('Error in linkEmailPassword:', error);
         throw error;
