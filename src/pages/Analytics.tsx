@@ -16,7 +16,6 @@ import {
   InputLabel,
   SelectChangeEvent,
   Fade,
-  Button,
 } from '@mui/material';
 import MoodInsightsCard from '@/components/analytics/MoodInsightsCard';
 import MoodTrendChart from '@/components/analytics/MoodTrendChart';
@@ -126,6 +125,8 @@ const Analytics: React.FC = () => {
     );
   };
 
+  /*eslint-disable */
+  //@ts-ignore
   const generateTestData = async () => {
     try {
       if (!auth?.myUser) {
