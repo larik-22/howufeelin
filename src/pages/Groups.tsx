@@ -34,6 +34,7 @@ import { GroupMemberRole } from '@/types/GroupMemberRole';
 import { useGroupPermissions } from '@/hooks/useGroupPermissions';
 import { useGroupFilters, SortOption } from '@/hooks/useGroupFilters';
 import { useLeaveGroup } from '@/hooks/useLeaveGroup';
+import { useLoadingState } from '@/hooks/useLoadingState';
 import { copyToClipboard } from '@/utils/clipboard';
 
 interface Notification {
@@ -61,11 +62,15 @@ export default function Groups() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+
+  // Use our custom loading state hook
+  const displayLoading = useLoadingState(isLoading, [auth?.myUser?.userId]);
+  const displayDeleting = useLoadingState(isDeleting, [deletingGroupId]);
 
   // Use our custom hook for filtering
   const {
@@ -109,7 +114,7 @@ export default function Groups() {
   useEffect(() => {
     if (!auth?.myUser?.userId) return;
 
-    setLoading(true); // Set loading when starting subscription
+    setIsLoading(true); // Set loading when starting subscription
     let memberCountSubscription = () => {};
     const memberRoleSubscriptions: (() => void)[] = [];
 
@@ -180,7 +185,7 @@ export default function Groups() {
         return newCounts;
       });
 
-      setLoading(false); // Clear loading when groups are received
+      setIsLoading(false); // Clear loading when groups are received
     });
 
     // Clean up all subscriptions when component unmounts
@@ -189,7 +194,7 @@ export default function Groups() {
       unsubscribe();
       memberCountSubscription();
       memberRoleSubscriptions.forEach(unsubscribe => unsubscribe());
-      setLoading(false); // Ensure loading is cleared on unmount
+      setIsLoading(false); // Ensure loading is cleared on unmount
     };
   }, [auth?.myUser?.userId]);
 
@@ -299,6 +304,7 @@ export default function Groups() {
 
     try {
       setIsDeleting(true);
+      setDeletingGroupId(selectedGroup.groupId);
 
       // Store the group ID and name before deletion for cleanup
       const groupIdToDelete = selectedGroup.groupId;
@@ -342,7 +348,7 @@ export default function Groups() {
 
   if (!auth || !auth.firebaseUser || !auth.myUser) return null;
 
-  if (loading) {
+  if (displayLoading) {
     return (
       <Box
         sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}
@@ -533,13 +539,13 @@ export default function Groups() {
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={isDeleteDialogOpen}
-        onClose={isDeleting ? undefined : handleCloseDeleteDialog}
+        onClose={displayDeleting ? undefined : handleCloseDeleteDialog}
         aria-labelledby="delete-dialog-title"
         aria-describedby="delete-dialog-description"
         fullScreen={isMobile}
       >
         <DialogTitle id="delete-dialog-title" sx={{ display: 'flex', alignItems: 'center' }}>
-          {isDeleting && <CircularProgress size={20} sx={{ mr: 1 }} />}
+          {displayDeleting && <CircularProgress size={20} sx={{ mr: 1 }} />}
           Delete Group
         </DialogTitle>
         <DialogContent>
@@ -549,17 +555,19 @@ export default function Groups() {
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ p: { xs: 2, sm: 3 } }}>
-          <Button onClick={handleCloseDeleteDialog} disabled={isDeleting}>
+          <Button onClick={handleCloseDeleteDialog} disabled={displayDeleting}>
             Cancel
           </Button>
           <Button
             onClick={handleDeleteGroup}
             color="error"
-            disabled={isDeleting}
+            disabled={displayDeleting}
             autoFocus
-            startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+            startIcon={
+              displayDeleting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />
+            }
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {displayDeleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -17,6 +17,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { groupService } from '@/services/groupService';
 import { Group } from '@/types/Group';
 import { MyUser } from '@/types/MyUser';
+import { useLoadingState } from '@/hooks/useLoadingState';
 import { copyToClipboard } from '@/utils/clipboard';
 
 // Validation constants
@@ -56,6 +57,9 @@ export default function GroupFormDialog({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Use our custom loading state hook
+  const displaySubmitting = useLoadingState(isSubmitting, [open, mode]);
 
   // Memoize handleClose to prevent unnecessary re-renders
   const handleClose = useCallback(() => {
@@ -292,7 +296,7 @@ export default function GroupFormDialog({
                 variant="outlined"
                 value={groupName}
                 onChange={handleNameChange}
-                disabled={isSubmitting}
+                disabled={displaySubmitting}
                 required
                 error={!!nameError}
                 helperText={nameError || `${groupName.length}/${MAX_GROUP_NAME_LENGTH}`}
@@ -308,7 +312,7 @@ export default function GroupFormDialog({
                 rows={3}
                 value={groupDescription}
                 onChange={handleDescriptionChange}
-                disabled={isSubmitting}
+                disabled={displaySubmitting}
                 error={!!descriptionError}
                 helperText={
                   descriptionError || `${groupDescription.length}/${MAX_GROUP_DESCRIPTION_LENGTH}`
@@ -324,17 +328,17 @@ export default function GroupFormDialog({
             </Button>
           ) : (
             <>
-              <Button onClick={handleClose} disabled={isSubmitting}>
+              <Button onClick={handleClose} disabled={displaySubmitting}>
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmit}
                 color="primary"
                 variant="contained"
-                disabled={isSubmitting || !!nameError || !!descriptionError}
-                startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+                disabled={displaySubmitting || !!nameError || !!descriptionError}
+                startIcon={displaySubmitting ? <CircularProgress size={20} /> : null}
               >
-                {isSubmitting
+                {displaySubmitting
                   ? mode === 'create'
                     ? 'Creating...'
                     : 'Updating...'

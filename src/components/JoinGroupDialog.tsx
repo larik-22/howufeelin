@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { groupService } from '@/services/groupService';
 import { MyUser } from '@/types/MyUser';
+import { useLoadingState } from '@/hooks/useLoadingState';
 
 interface JoinGroupDialogProps {
   open: boolean;
@@ -24,8 +25,11 @@ const JOIN_CODE_LENGTH = 6;
 
 export default function JoinGroupDialog({ open, onClose, onSuccess, user }: JoinGroupDialogProps) {
   const [joinCode, setJoinCode] = useState<string[]>(Array(JOIN_CODE_LENGTH).fill(''));
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Use our custom loading state hook
+  const displayLoading = useLoadingState(isLoading, [open]);
 
   const handleInputChange = (index: number, value: string) => {
     if (value.length > 1) return; // Prevent multiple characters
@@ -73,7 +77,7 @@ export default function JoinGroupDialog({ open, onClose, onSuccess, user }: Join
     }
 
     try {
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
       const group = await groupService.joinGroup(code, user);
 
@@ -85,7 +89,7 @@ export default function JoinGroupDialog({ open, onClose, onSuccess, user }: Join
       console.error('Error joining group:', err);
       setError('Invalid join code or you are already a member of this group');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -141,17 +145,17 @@ export default function JoinGroupDialog({ open, onClose, onSuccess, user }: Join
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button onClick={handleClose} disabled={displayLoading}>
           Cancel
         </Button>
         <Button
           onClick={handleSubmit}
           color="primary"
           variant="contained"
-          disabled={loading || joinCode.some(char => !char)}
-          startIcon={loading ? <CircularProgress size={20} /> : null}
+          disabled={displayLoading || joinCode.some(char => !char)}
+          startIcon={displayLoading ? <CircularProgress size={20} /> : null}
         >
-          {loading ? 'Joining...' : 'Join Group'}
+          {displayLoading ? 'Joining...' : 'Join Group'}
         </Button>
       </DialogActions>
     </Dialog>
