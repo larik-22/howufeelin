@@ -1,13 +1,13 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { Typography, Paper, useTheme, useMediaQuery } from '@mui/material';
 import { LineChart } from '@mui/x-charts/LineChart';
-import { MoodTrend } from '@/types/Analytics';
+import { MoodInsights } from '@/types/Analytics';
 import { RATING_MIN, RATING_MAX } from '@/types/Rating';
 
-interface MoodTrendChartProps {
-  trends: MoodTrend[];
-  title?: string;
-  height?: number;
+export interface MoodTrendChartProps {
+  insights: MoodInsights;
+  height: number;
 }
 
 interface ChartDataPoint {
@@ -16,18 +16,14 @@ interface ChartDataPoint {
   count: number;
 }
 
-export default function MoodTrendChart({
-  trends,
-  title = 'Mood Trends',
-  height = 300,
-}: MoodTrendChartProps) {
+const MoodTrendChart: React.FC<MoodTrendChartProps> = ({ insights, height }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [data, setData] = useState<ChartDataPoint[]>([]);
 
   useEffect(() => {
     // Format data for the chart
-    const formattedData = trends.map(trend => ({
+    const formattedData = insights.moodTrends.map(trend => ({
       date: new Date(trend.date).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -37,9 +33,9 @@ export default function MoodTrendChart({
     }));
 
     setData(formattedData);
-  }, [trends]);
+  }, [insights.moodTrends]);
 
-  if (trends.length === 0) {
+  if (insights.moodTrends.length === 0) {
     return (
       <Paper
         elevation={0}
@@ -72,7 +68,7 @@ export default function MoodTrendChart({
       }}
     >
       <Typography variant="h6" gutterBottom>
-        {title}
+        Mood Trends
       </Typography>
       <div style={{ height: '85%', width: '100%' }}>
         <LineChart
@@ -90,7 +86,8 @@ export default function MoodTrendChart({
               data: data.map((_, index) => index),
               tickLabelStyle: {
                 fontSize: isMobile ? 10 : 12,
-                angle: isMobile ? -45 : 0,
+                angle: -45,
+                textAnchor: 'end',
               },
               tickSize: 0,
             },
@@ -104,7 +101,7 @@ export default function MoodTrendChart({
             },
           ]}
           height={(isMobile ? height * 0.8 : height) * 0.85}
-          margin={{ top: 10, right: 30, left: 20, bottom: isMobile ? 50 : 30 }}
+          margin={{ top: 10, right: 30, left: 20, bottom: 60 }}
           sx={{
             '.MuiLineElement-root': {
               strokeWidth: 2,
@@ -127,4 +124,6 @@ export default function MoodTrendChart({
       </div>
     </Paper>
   );
-}
+};
+
+export default MoodTrendChart;

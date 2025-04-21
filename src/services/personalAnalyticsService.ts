@@ -1,6 +1,20 @@
 /* eslint-disable */
 //@ts-nocheck
-import { Timestamp, Unsubscribe, doc, setDoc } from 'firebase/firestore';
+import {
+  Timestamp,
+  Unsubscribe,
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot,
+  query,
+  where,
+  collection,
+  getDocs,
+  orderBy,
+  writeBatch,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { db } from '@/firebase';
 import { ratingService } from './ratingService';
 import { groupService } from './groupService';
@@ -85,17 +99,18 @@ export interface PersonalAnalyticsService {
 
   // Unsubscribe from all active subscriptions
   unsubscribeAll(): void;
+
+  // Cleanup resources and subscriptions
+  cleanup(): void;
 }
 
 class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   private activeSubscriptions: Record<string, Unsubscribe> = {};
-  private insightsCache: Record<string, { insights: MoodInsights; timestamp: number }> = {};
-  private trendsCache: Record<string, { trends: MoodTrend[]; timestamp: number }> = {};
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
   private readonly ANALYTICS_COLLECTION = 'analytics_snapshots';
   private batchUpdateTimeout: NodeJS.Timeout | null = null;
   private pendingUpdates: Set<string> = new Set();
-  private ratingsSubscription: Unsubscribe | null = null;
+  private readonly CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
+  private readonly BATCH_UPDATE_DELAY_MS = 3000; // 3 seconds batch update delay
 
   private generateSubscriptionId(type: string, id: string): string {
     return `${type}_${id}`;
@@ -125,37 +140,48 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   }
 
   private getCacheKey(userId: string, groupId: string | null, dateRange: DateRangeFilter): string {
+    // Create a more efficient cache key that's still unique
     return `${userId}_${groupId || 'all'}_${dateRange.startDate}_${dateRange.endDate}`;
   }
 
-  private getInsightsFromCache(cacheKey: string): MoodInsights | null {
-    const cached = this.insightsCache[cacheKey];
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      return cached.insights;
+  private async getCachedInsights(cacheKey: string): Promise<MoodInsights | null> {
+    try {
+      const snapshotRef = doc(db, this.ANALYTICS_COLLECTION, cacheKey);
+      const snapshot = await getDoc(snapshotRef);
+
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        // Check if the cache is still valid
+        const lastUpdated = data.lastUpdated.toDate();
+        const now = new Date();
+        const cacheAge = now.getTime() - lastUpdated.getTime();
+
+        if (cacheAge < this.CACHE_TTL_MS) {
+          console.log('Returning cached insights');
+          // Ensure we have all required fields
+          if (data.insights && typeof data.insights === 'object') {
+            return {
+              overallAverage: data.insights.overallAverage || 0,
+              highestMood: data.insights.highestMood || 0,
+              lowestMood: data.insights.lowestMood || 0,
+              moodVolatility: data.insights.moodVolatility || 0,
+              streakDays: data.insights.streakDays || 0,
+              totalEntries: data.insights.totalEntries || 0,
+              moodTrends: data.insights.moodTrends || [],
+              dayOfWeekPatterns: data.insights.dayOfWeekPatterns || [],
+              timeOfDayPatterns: data.insights.timeOfDayPatterns || [],
+              recentRatings: data.insights.recentRatings || [],
+            };
+          }
+        } else {
+          console.log('Cache expired, fetching fresh data');
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting cached insights:', error);
+      return null;
     }
-    return null;
-  }
-
-  private getTrendsFromCache(cacheKey: string): MoodTrend[] | null {
-    const cached = this.trendsCache[cacheKey];
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      return cached.trends;
-    }
-    return null;
-  }
-
-  private setInsightsCache(cacheKey: string, insights: MoodInsights): void {
-    this.insightsCache[cacheKey] = {
-      insights,
-      timestamp: Date.now(),
-    };
-  }
-
-  private setTrendsCache(cacheKey: string, trends: MoodTrend[]): void {
-    this.trendsCache[cacheKey] = {
-      trends,
-      timestamp: Date.now(),
-    };
   }
 
   private async updateAnalyticsSnapshot(
@@ -173,7 +199,7 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
         groupId,
         dateRange,
         insights,
-        lastUpdated: Timestamp.now(),
+        lastUpdated: serverTimestamp(), // Use server timestamp for more accurate timing
       });
     } catch (error) {
       console.error('Error updating analytics snapshot:', error);
@@ -196,19 +222,31 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       const updates = Array.from(this.pendingUpdates);
       this.pendingUpdates.clear();
 
+      // Use a batch write for better performance
+      const batch = writeBatch(db);
+
       for (const id of updates) {
         const [userId, groupId, startDate, endDate] = id.split('_');
-        const cachedInsights = this.insightsCache[id]?.insights;
-        if (cachedInsights) {
-          await this.updateAnalyticsSnapshot(
+        const insights = await this.getMoodInsights(userId, { startDate, endDate });
+        if (insights) {
+          const snapshotRef = doc(db, this.ANALYTICS_COLLECTION, id);
+          batch.set(snapshotRef, {
             userId,
-            groupId === 'all' ? null : groupId,
-            { startDate, endDate },
-            cachedInsights
-          );
+            groupId: groupId === 'all' ? null : groupId,
+            dateRange: { startDate, endDate },
+            insights,
+            lastUpdated: serverTimestamp(),
+          });
         }
       }
-    }, 5000); // Batch updates every 5 seconds
+
+      try {
+        await batch.commit();
+        console.log(`Batch updated ${updates.length} analytics snapshots`);
+      } catch (error) {
+        console.error('Error committing batch update:', error);
+      }
+    }, this.BATCH_UPDATE_DELAY_MS);
   }
 
   async getMoodInsights(userId: string, dateRange: DateRangeFilter): Promise<MoodInsights> {
@@ -217,12 +255,10 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       console.log('Date range:', dateRange);
 
       const cacheKey = this.getCacheKey(userId, null, dateRange);
-      console.log('Cache key:', cacheKey);
 
-      // Try to get from cache first
-      const cachedInsights = this.getInsightsFromCache(cacheKey);
+      // Try to get from Firestore cache first
+      const cachedInsights = await this.getCachedInsights(cacheKey);
       if (cachedInsights) {
-        console.log('Returning cached insights');
         return cachedInsights;
       }
 
@@ -261,7 +297,9 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       }
 
       const insights = this.calculateMoodInsights(allRatings);
-      this.setInsightsCache(cacheKey, insights);
+
+      // Schedule update of the cache
+      this.scheduleBatchUpdate(userId, null, dateRange);
 
       return insights;
     } catch (error) {
@@ -277,7 +315,7 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   ): Promise<MoodInsights> {
     try {
       const cacheKey = this.getCacheKey(userId, groupId, dateRange);
-      const cachedInsights = this.getInsightsFromCache(cacheKey);
+      const cachedInsights = await this.getCachedInsights(cacheKey);
       if (cachedInsights) {
         return cachedInsights;
       }
@@ -290,7 +328,10 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       );
 
       const insights = this.calculateMoodInsights(ratings);
-      this.setInsightsCache(cacheKey, insights);
+
+      // Schedule update of the cache
+      this.scheduleBatchUpdate(userId, groupId, dateRange);
+
       return insights;
     } catch (error) {
       console.error('Error getting group mood insights:', error);
@@ -313,9 +354,9 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   async getMoodTrends(userId: string, dateRange: DateRangeFilter): Promise<MoodTrend[]> {
     try {
       const cacheKey = this.getCacheKey(userId, null, dateRange);
-      const cachedTrends = this.getTrendsFromCache(cacheKey);
-      if (cachedTrends) {
-        return cachedTrends;
+      const cachedInsights = await this.getCachedInsights(cacheKey);
+      if (cachedInsights?.moodTrends) {
+        return cachedInsights.moodTrends;
       }
 
       // Get all groups the user is a member of
@@ -336,7 +377,11 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       }
 
       const trends = this.calculateMoodTrends(allRatings);
-      this.setTrendsCache(cacheKey, trends);
+
+      // Schedule update of the cache with complete insights
+      const insights = this.calculateMoodInsights(allRatings);
+      this.scheduleBatchUpdate(userId, null, dateRange);
+
       return trends;
     } catch (error) {
       console.error('Error getting mood trends:', error);
@@ -351,9 +396,9 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   ): Promise<MoodTrend[]> {
     try {
       const cacheKey = this.getCacheKey(userId, groupId, dateRange);
-      const cachedTrends = this.getTrendsFromCache(cacheKey);
-      if (cachedTrends) {
-        return cachedTrends;
+      const cachedInsights = await this.getCachedInsights(cacheKey);
+      if (cachedInsights?.moodTrends) {
+        return cachedInsights.moodTrends;
       }
 
       const ratings = await ratingService.getUserRatingsForDateRange(
@@ -364,7 +409,11 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       );
 
       const trends = this.calculateMoodTrends(ratings);
-      this.setTrendsCache(cacheKey, trends);
+
+      // Schedule update of the cache with complete insights
+      const insights = this.calculateMoodInsights(ratings);
+      this.scheduleBatchUpdate(userId, groupId, dateRange);
+
       return trends;
     } catch (error) {
       console.error('Error getting group mood trends:', error);
@@ -383,15 +432,37 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
     // Unsubscribe from any existing subscription
     this.unsubscribe(subscriptionId);
 
-    // First, get the initial data
-    this.getMoodInsights(userId, dateRange)
-      .then(insights => {
-        console.log('Initial mood insights fetched:', insights);
-        callback(insights);
+    // First, try to get from cache
+    const cacheKey = this.getCacheKey(userId, null, dateRange);
+    this.getCachedInsights(cacheKey)
+      .then(cachedInsights => {
+        if (cachedInsights) {
+          console.log('Using cached insights for initial data');
+          callback(cachedInsights);
+        } else {
+          // If no cache, fetch fresh data
+          this.getMoodInsights(userId, dateRange)
+            .then(insights => {
+              console.log('Initial mood insights fetched:', insights);
+              callback(insights);
+            })
+            .catch(error => {
+              console.error('Error getting initial mood insights:', error);
+              callback(this.getEmptyInsights());
+            });
+        }
       })
       .catch(error => {
-        console.error('Error getting initial mood insights:', error);
-        callback(this.getEmptyInsights());
+        console.error('Error checking cache:', error);
+        // Fallback to fetching fresh data
+        this.getMoodInsights(userId, dateRange)
+          .then(insights => {
+            callback(insights);
+          })
+          .catch(error => {
+            console.error('Error getting initial mood insights:', error);
+            callback(this.getEmptyInsights());
+          });
       });
 
     // Set up a subscription to user groups
@@ -421,8 +492,10 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
 
         console.log(`Fetched ${allRatings.length} ratings for user ${userId}`);
         const insights = this.calculateMoodInsights(allRatings);
-        const cacheKey = this.getCacheKey(userId, null, dateRange);
-        this.setInsightsCache(cacheKey, insights);
+
+        // Update cache in the background
+        this.scheduleBatchUpdate(userId, null, dateRange);
+
         callback(insights);
       } catch (error) {
         console.error('Error updating mood insights:', error);
@@ -450,13 +523,36 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
     // Unsubscribe from any existing subscription with the same ID
     this.unsubscribe(subscriptionId);
 
-    // First, get the initial data
-    this.getGroupMoodInsights(userId, groupId, dateRange)
-      .then(insights => {
-        callback(insights);
+    // First, try to get from cache
+    const cacheKey = this.getCacheKey(userId, groupId, dateRange);
+    this.getCachedInsights(cacheKey)
+      .then(cachedInsights => {
+        if (cachedInsights) {
+          console.log('Using cached group insights for initial data');
+          callback(cachedInsights);
+        } else {
+          // If no cache, fetch fresh data
+          this.getGroupMoodInsights(userId, groupId, dateRange)
+            .then(insights => {
+              callback(insights);
+            })
+            .catch(error => {
+              console.error('Error getting initial group mood insights:', error);
+              callback(this.getEmptyInsights());
+            });
+        }
       })
       .catch(error => {
-        console.error('Error getting initial group mood insights:', error);
+        console.error('Error checking cache:', error);
+        // Fallback to fetching fresh data
+        this.getGroupMoodInsights(userId, groupId, dateRange)
+          .then(insights => {
+            callback(insights);
+          })
+          .catch(error => {
+            console.error('Error getting initial group mood insights:', error);
+            callback(this.getEmptyInsights());
+          });
       });
 
     // Then, set up a subscription to ratings for the date range
@@ -469,8 +565,10 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
           // Filter ratings for the user
           const userRatings = ratings.filter(rating => rating.userId === userId);
           const insights = this.calculateMoodInsights(userRatings);
-          const cacheKey = this.getCacheKey(userId, groupId, dateRange);
-          this.setInsightsCache(cacheKey, insights);
+
+          // Update cache in the background
+          this.scheduleBatchUpdate(userId, groupId, dateRange);
+
           callback(insights);
         } catch (error) {
           console.error('Error updating group mood insights:', error);
@@ -496,13 +594,36 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
     // Unsubscribe from any existing subscription with the same ID
     this.unsubscribe(subscriptionId);
 
-    // First, get the initial data
-    this.getMoodTrends(userId, dateRange)
-      .then(trends => {
-        callback(trends);
+    // First, try to get from cache
+    const cacheKey = this.getCacheKey(userId, null, dateRange);
+    this.getCachedInsights(cacheKey)
+      .then(cachedInsights => {
+        if (cachedInsights?.moodTrends) {
+          console.log('Using cached mood trends for initial data');
+          callback(cachedInsights.moodTrends);
+        } else {
+          // If no cache, fetch fresh data
+          this.getMoodTrends(userId, dateRange)
+            .then(trends => {
+              callback(trends);
+            })
+            .catch(error => {
+              console.error('Error getting initial mood trends:', error);
+              callback([]);
+            });
+        }
       })
       .catch(error => {
-        console.error('Error getting initial mood trends:', error);
+        console.error('Error checking cache:', error);
+        // Fallback to fetching fresh data
+        this.getMoodTrends(userId, dateRange)
+          .then(trends => {
+            callback(trends);
+          })
+          .catch(error => {
+            console.error('Error getting initial mood trends:', error);
+            callback([]);
+          });
       });
 
     // Then, set up a subscription to user groups
@@ -510,21 +631,23 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       try {
         // Get all ratings for the user across all groups
         const allRatings: Rating[] = [];
-
-        for (const group of groups) {
-          const groupRatings = await ratingService.getUserRatingsForDateRange(
+        const ratingPromises = groups.map(group =>
+          ratingService.getUserRatingsForDateRange(
             group.groupId,
             userId,
             dateRange.startDate,
             dateRange.endDate
-          );
+          )
+        );
 
-          allRatings.push(...groupRatings);
-        }
+        const groupRatings = await Promise.all(ratingPromises);
+        groupRatings.forEach(ratings => allRatings.push(...ratings));
 
         const trends = this.calculateMoodTrends(allRatings);
-        const cacheKey = this.getCacheKey(userId, null, dateRange);
-        this.setTrendsCache(cacheKey, trends);
+
+        // Update cache in the background
+        this.scheduleBatchUpdate(userId, null, dateRange);
+
         callback(trends);
       } catch (error) {
         console.error('Error updating mood trends:', error);
@@ -550,13 +673,36 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
     // Unsubscribe from any existing subscription with the same ID
     this.unsubscribe(subscriptionId);
 
-    // First, get the initial data
-    this.getGroupMoodTrends(userId, groupId, dateRange)
-      .then(trends => {
-        callback(trends);
+    // First, try to get from cache
+    const cacheKey = this.getCacheKey(userId, groupId, dateRange);
+    this.getCachedInsights(cacheKey)
+      .then(cachedInsights => {
+        if (cachedInsights?.moodTrends) {
+          console.log('Using cached group mood trends for initial data');
+          callback(cachedInsights.moodTrends);
+        } else {
+          // If no cache, fetch fresh data
+          this.getGroupMoodTrends(userId, groupId, dateRange)
+            .then(trends => {
+              callback(trends);
+            })
+            .catch(error => {
+              console.error('Error getting initial group mood trends:', error);
+              callback([]);
+            });
+        }
       })
       .catch(error => {
-        console.error('Error getting initial group mood trends:', error);
+        console.error('Error checking cache:', error);
+        // Fallback to fetching fresh data
+        this.getGroupMoodTrends(userId, groupId, dateRange)
+          .then(trends => {
+            callback(trends);
+          })
+          .catch(error => {
+            console.error('Error getting initial group mood trends:', error);
+            callback([]);
+          });
       });
 
     // Then, set up a subscription to ratings for the date range
@@ -569,8 +715,10 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
           // Filter ratings for the user
           const userRatings = ratings.filter(rating => rating.userId === userId);
           const trends = this.calculateMoodTrends(userRatings);
-          const cacheKey = this.getCacheKey(userId, groupId, dateRange);
-          this.setTrendsCache(cacheKey, trends);
+
+          // Update cache in the background
+          this.scheduleBatchUpdate(userId, groupId, dateRange);
+
           callback(trends);
         } catch (error) {
           console.error('Error updating group mood trends:', error);
@@ -587,6 +735,12 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   }
 
   getDayOfWeekPatterns(ratings: Rating[]): MoodPattern[] {
+    if (ratings.length === 0) {
+      return Array(7)
+        .fill(0)
+        .map((_, i) => ({ dayOfWeek: i, averageRating: 0, count: 0 }));
+    }
+
     const patterns: MoodPattern[] = [];
     const dayCounts: Record<number, { sum: number; count: number }> = {};
 
@@ -618,6 +772,12 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
   }
 
   getTimeOfDayPatterns(ratings: Rating[]): TimeOfDayPattern[] {
+    if (ratings.length === 0) {
+      return Array(24)
+        .fill(0)
+        .map((_, i) => ({ hour: i, averageRating: 0, count: 0 }));
+    }
+
     const patterns: TimeOfDayPattern[] = [];
     const hourCounts: Record<number, { sum: number; count: number }> = {};
 
@@ -628,7 +788,6 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
 
     // Calculate sums and counts for each hour
     ratings.forEach(rating => {
-      // Since we don't store time in ratings, we'll use the creation timestamp
       const createdAt = rating.createdAt as Timestamp;
       const date = createdAt.toDate();
       const hour = date.getHours();
@@ -770,18 +929,7 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
 
   private calculateMoodInsights(ratings: Rating[]): MoodInsights {
     if (ratings.length === 0) {
-      return {
-        overallAverage: 0,
-        highestMood: 0,
-        lowestMood: 0,
-        moodVolatility: 0,
-        streakDays: 0,
-        totalEntries: 0,
-        moodTrends: [],
-        dayOfWeekPatterns: [],
-        timeOfDayPatterns: [],
-        recentRatings: [],
-      };
+      return this.getEmptyInsights();
     }
 
     // Calculate basic statistics
@@ -866,6 +1014,14 @@ class FirestorePersonalAnalyticsService implements PersonalAnalyticsService {
       timeOfDayPatterns: [],
       recentRatings: [],
     };
+  }
+
+  public cleanup(): void {
+    this.unsubscribeAll();
+    if (this.batchUpdateTimeout) {
+      clearTimeout(this.batchUpdateTimeout);
+      this.batchUpdateTimeout = null;
+    }
   }
 }
 
