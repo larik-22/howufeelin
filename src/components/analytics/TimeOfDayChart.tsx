@@ -1,13 +1,14 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { Typography, Paper, useTheme } from '@mui/material';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { TimeOfDayPattern } from '@/types/Analytics';
+import { MoodInsights } from '@/types/Analytics';
 import { RATING_MIN, RATING_MAX } from '@/types/Rating';
 
-interface TimeOfDayChartProps {
-  patterns: TimeOfDayPattern[];
-  title?: string;
-  height?: number;
+export interface TimeOfDayChartProps {
+  insights: MoodInsights;
+  height: number;
+  isMobile: boolean;
 }
 
 interface ChartDataPoint {
@@ -16,26 +17,22 @@ interface ChartDataPoint {
   count: number;
 }
 
-export default function TimeOfDayChart({
-  patterns,
-  title = 'Time of Day Patterns',
-  height = 300,
-}: TimeOfDayChartProps) {
+const TimeOfDayChart: React.FC<TimeOfDayChartProps> = ({ insights, height, isMobile }) => {
   const theme = useTheme();
   const [data, setData] = useState<ChartDataPoint[]>([]);
 
   useEffect(() => {
     // Format data for the chart
-    const formattedData = patterns.map(pattern => ({
+    const formattedData = insights.timeOfDayPatterns.map(pattern => ({
       hour: `${pattern.hour}:00`,
       rating: Number(pattern.averageRating.toFixed(1)),
       count: pattern.count,
     }));
 
     setData(formattedData);
-  }, [patterns]);
+  }, [insights.timeOfDayPatterns]);
 
-  if (patterns.length === 0) {
+  if (insights.timeOfDayPatterns.length === 0) {
     return (
       <Paper
         elevation={0}
@@ -67,7 +64,7 @@ export default function TimeOfDayChart({
       }}
     >
       <Typography variant="h6" gutterBottom>
-        {title}
+        Time of Day Patterns
       </Typography>
       <div style={{ height: '85%', width: '100%' }}>
         <BarChart
@@ -82,7 +79,11 @@ export default function TimeOfDayChart({
             {
               data: data.map(d => d.hour),
               scaleType: 'band',
-              tickLabelStyle: { fontSize: 12 },
+              tickLabelStyle: {
+                fontSize: isMobile ? 10 : 12,
+                angle: -45,
+                textAnchor: 'end',
+              },
               tickSize: 0,
             },
           ]}
@@ -90,12 +91,12 @@ export default function TimeOfDayChart({
             {
               min: RATING_MIN,
               max: RATING_MAX,
-              tickLabelStyle: { fontSize: 12 },
+              tickLabelStyle: { fontSize: isMobile ? 10 : 12 },
               tickSize: 0,
             },
           ]}
           height={height * 0.85}
-          margin={{ top: 10, right: 30, left: 20, bottom: 30 }}
+          margin={{ top: 10, right: 30, left: 20, bottom: 60 }}
           sx={{
             '.MuiBarElement-root': {
               rx: 4,
@@ -108,4 +109,6 @@ export default function TimeOfDayChart({
       </div>
     </Paper>
   );
-}
+};
+
+export default TimeOfDayChart;

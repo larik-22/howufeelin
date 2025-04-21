@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Typography, Paper, useTheme, useMediaQuery } from '@mui/material';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { MoodPattern } from '@/types/Analytics';
+import { MoodInsights } from '@/types/Analytics';
 import { RATING_MIN, RATING_MAX } from '@/types/Rating';
 
 interface DayOfWeekChartProps {
-  patterns: MoodPattern[];
-  title?: string;
-  height?: number;
+  insights: MoodInsights;
+  height: number;
 }
 
 interface ChartDataPoint {
@@ -16,11 +15,7 @@ interface ChartDataPoint {
   count: number;
 }
 
-export default function DayOfWeekChart({
-  patterns,
-  title = 'Mood by Day of Week',
-  height = 300,
-}: DayOfWeekChartProps) {
+export default function DayOfWeekChart({ insights, height = 300 }: DayOfWeekChartProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [data, setData] = useState<ChartDataPoint[]>([]);
@@ -28,16 +23,16 @@ export default function DayOfWeekChart({
   useEffect(() => {
     // Format data for the chart
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const formattedData = patterns.map(pattern => ({
+    const formattedData = insights.dayOfWeekPatterns.map(pattern => ({
       day: dayNames[pattern.dayOfWeek],
       rating: Number(pattern.averageRating.toFixed(1)),
       count: pattern.count,
     }));
 
     setData(formattedData);
-  }, [patterns]);
+  }, [insights.dayOfWeekPatterns]);
 
-  if (patterns.length === 0) {
+  if (insights.dayOfWeekPatterns.length === 0) {
     return (
       <Paper
         elevation={0}
@@ -71,7 +66,7 @@ export default function DayOfWeekChart({
       }}
     >
       <Typography variant="h6" gutterBottom>
-        {title}
+        Day of Week Patterns
       </Typography>
       <div style={{ height: '85%', width: '100%' }}>
         <BarChart
@@ -88,8 +83,9 @@ export default function DayOfWeekChart({
               data: data.map(d => d.day),
               scaleType: 'band',
               tickLabelStyle: {
-                fontSize: isMobile ? 8 : 10,
-                angle: isMobile ? -45 : 0,
+                fontSize: isMobile ? 10 : 12,
+                angle: -45,
+                textAnchor: 'end',
               },
               tickSize: 0,
             },
@@ -103,7 +99,7 @@ export default function DayOfWeekChart({
             },
           ]}
           height={(isMobile ? height * 0.8 : height) * 0.85}
-          margin={{ top: 10, right: 30, left: 20, bottom: isMobile ? 50 : 30 }}
+          margin={{ top: 10, right: 30, left: 20, bottom: 60 }}
           sx={{
             '.MuiBarElement-root': {
               rx: 4,

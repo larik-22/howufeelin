@@ -1,236 +1,216 @@
+import React, { useEffect, useState, useCallback, useMemo, useContext } from 'react';
+import { personalAnalyticsService } from '@/services/personalAnalyticsService';
+import { MoodInsights, TimeRange } from '@/types/Analytics';
 import {
   Box,
   Container,
+  Paper,
   Typography,
   useTheme,
   useMediaQuery,
-  ToggleButtonGroup,
-  ToggleButton,
-  Skeleton,
-  Paper,
+  CircularProgress,
+  Alert,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  SelectChangeEvent,
+  Fade,
 } from '@mui/material';
-import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import MoodInsightsCard from '@/components/analytics/MoodInsightsCard';
 import MoodTrendChart from '@/components/analytics/MoodTrendChart';
 import DayOfWeekChart from '@/components/analytics/DayOfWeekChart';
 import TimeOfDayChart from '@/components/analytics/TimeOfDayChart';
-import { MoodInsights, TimeRange } from '@/types/Analytics';
-import { personalAnalyticsService } from '@/services/personalAnalyticsService';
+import ErrorBoundary from '@/components/common/ErrorBoundary';
 import AuthContext from '@/contexts/auth/authContext';
+import { useLoadingState } from '@/hooks/useLoadingState';
 
-export default function Analytics() {
+const Analytics: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const auth = useContext(AuthContext);
-
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [insights, setInsights] = useState<MoodInsights | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [timeRange, setTimeRange] = useState<TimeRange>('month');
-  const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
+  const [timeRange, setTimeRange] = useState<TimeRange>('week');
+  const [unsubscribe, setUnsubscribe] = useState<(() => void) | null>(null);
+  const [dataReady, setDataReady] = useState(false);
 
-  // Memoize the date range calculation to prevent unnecessary recalculations
-  const getDateRange = useCallback(() => {
-    return personalAnalyticsService.getDateRangeForTimeRange(timeRange);
-  }, [timeRange]);
+  // Use our custom loading hook with a minimum loading time
+  const displayLoading = useLoadingState(isLoading, [timeRange], { minLoadingTime: 1000 });
 
-  useEffect(() => {
-    // Clean up previous subscription if it exists
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-    }
-
-    if (!auth?.myUser?.userId) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const dateRange = getDateRange();
-
-    // Set up subscription for updates
-    unsubscribeRef.current = personalAnalyticsService.subscribeToMoodInsights(
-      auth.myUser.userId,
-      dateRange,
-      newInsights => {
-        setInsights(newInsights);
-        setLoading(false);
-      }
-    );
-
-    // Cleanup function
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-    };
-  }, [auth?.myUser?.userId, timeRange, getDateRange]);
-
-  // Handle time range changes
-  const handleTimeRangeChange = (
-    //@ts-expect-error - MUI types are not updated
-    event: React.MouseEvent<HTMLElement>,
-    newTimeRange: TimeRange | null
-  ) => {
-    if (newTimeRange !== null) {
-      setTimeRange(newTimeRange);
-    }
+  const handleTimeRangeChange = (event: SelectChangeEvent) => {
+    setTimeRange(event.target.value as TimeRange);
+    setDataReady(false);
   };
 
-  const renderSkeletonCard = () => (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 2, sm: 3 },
-        backdropFilter: 'blur(20px)',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-      }}
-    >
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Skeleton variant="rectangular" height={60} />
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: 2,
-          }}
-        >
-          <Skeleton variant="rectangular" height={100} />
-          <Skeleton variant="rectangular" height={100} />
-          <Skeleton variant="rectangular" height={100} />
-        </Box>
-      </Box>
-    </Paper>
-  );
+  const setupSubscription = useCallback(async () => {
+    try {
+      if (!auth?.myUser) {
+        setError('You must be logged in to view analytics');
+        setIsLoading(false);
+        return;
+      }
 
-  const renderSkeletonChart = (height: number = 350) => (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 2, sm: 3 },
-        backdropFilter: 'blur(20px)',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-      }}
-    >
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Skeleton variant="text" width={200} height={32} />
-        <Skeleton variant="rectangular" height={height} />
-      </Box>
-    </Paper>
-  );
+      setIsLoading(true);
+      setError(null);
+      setDataReady(false);
+
+      const dateRange = personalAnalyticsService.getDateRangeForTimeRange(timeRange);
+      const unsubscribeFn = personalAnalyticsService.subscribeToMoodInsights(
+        auth.myUser.userId, // Use the actual user ID from auth
+        dateRange,
+        (newInsights: MoodInsights) => {
+          setInsights(newInsights);
+          setIsLoading(false);
+
+          // Small delay to ensure smooth transition
+          setTimeout(() => {
+            setDataReady(true);
+          }, 100);
+        }
+      );
+
+      setUnsubscribe(() => unsubscribeFn);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
+      setIsLoading(false);
+    }
+  }, [timeRange, auth]);
+
+  useEffect(() => {
+    setupSubscription();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [setupSubscription]);
+
+  const chartHeight = useMemo(() => (isMobile ? 300 : 400), [isMobile]);
+
+  const renderCharts = () => {
+    if (!insights) return null;
+
+    return (
+      <Fade in={dataReady} timeout={800}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Box>
+            <MoodInsightsCard insights={insights} isLoading={displayLoading} />
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 4 }}>
+            <Box sx={{ flex: 2 }}>
+              <Paper sx={{ p: 3, height: '100%' }}>
+                <Typography variant="h6" gutterBottom>
+                  Mood Trends
+                </Typography>
+                <MoodTrendChart insights={insights} height={chartHeight} />
+              </Paper>
+            </Box>
+
+            <Box sx={{ flex: 1 }}>
+              <Paper sx={{ p: 3, height: '100%' }}>
+                <Typography variant="h6" gutterBottom>
+                  Day of Week Patterns
+                </Typography>
+                <DayOfWeekChart insights={insights} height={chartHeight} />
+              </Paper>
+            </Box>
+          </Box>
+
+          <Box>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Time of Day Patterns
+              </Typography>
+              <TimeOfDayChart insights={insights} height={chartHeight} isMobile={isMobile} />
+            </Paper>
+          </Box>
+        </Box>
+      </Fade>
+    );
+  };
 
   return (
-    <Container
-      maxWidth="lg"
-      sx={{
-        py: { xs: 3, sm: 4, md: 6 },
-        px: { xs: 2, sm: 3, md: 4 },
-      }}
-    >
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: { xs: 3, sm: 4, md: 6 },
-        }}
-      >
-        <Typography
-          variant="h4"
-          sx={{
-            fontWeight: 600,
-            letterSpacing: '-0.02em',
-            color: 'text.primary',
-            mb: { xs: 2, sm: 0 },
-          }}
-        >
-          Analytics
-        </Typography>
-
-        <ToggleButtonGroup
-          value={timeRange}
-          exclusive
-          onChange={handleTimeRangeChange}
-          aria-label="time range"
-          size="small"
-        >
-          <ToggleButton value="week" aria-label="week">
-            Week
-          </ToggleButton>
-          <ToggleButton value="month" aria-label="month">
-            Month
-          </ToggleButton>
-          <ToggleButton value="year" aria-label="year">
-            Year
-          </ToggleButton>
-          <ToggleButton value="all" aria-label="all time">
-            All Time
-          </ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
-
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: { xs: 3, sm: 4, md: 6 },
-        }}
-      >
-        {/* Insights Section */}
-        <Box>
-          {loading ? renderSkeletonCard() : insights && <MoodInsightsCard insights={insights} />}
-        </Box>
-
-        {/* Charts Section */}
-        <Box>
-          {/* Mood Trends Chart */}
-          <Box sx={{ mb: { xs: 3, sm: 4 } }}>
-            {loading
-              ? renderSkeletonChart(isMobile ? 300 : 400)
-              : insights && (
-                  <MoodTrendChart
-                    trends={insights.moodTrends}
-                    title="Mood Trends"
-                    height={isMobile ? 300 : 400}
-                  />
-                )}
-          </Box>
-
-          {/* Day and Time Patterns */}
+    <ErrorBoundary>
+      <Container maxWidth="lg">
+        <Box sx={{ py: 4 }}>
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: 'repeat(2, 1fr)',
-              },
-              gap: { xs: 3, sm: 4 },
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              alignItems: isMobile ? 'flex-start' : 'center',
+              gap: isMobile ? 2 : 0,
+              mb: 4,
             }}
           >
-            {loading ? (
-              <>
-                {renderSkeletonChart(isMobile ? 300 : 350)}
-                {renderSkeletonChart(isMobile ? 300 : 350)}
-              </>
-            ) : (
-              insights && (
-                <>
-                  <DayOfWeekChart
-                    patterns={insights.dayOfWeekPatterns}
-                    title="Day of Week Patterns"
-                    height={isMobile ? 300 : 350}
-                  />
-                  <TimeOfDayChart
-                    patterns={insights.timeOfDayPatterns}
-                    title="Time of Day Patterns"
-                    height={isMobile ? 300 : 350}
-                  />
-                </>
-              )
-            )}
+            <Typography variant="h4" component="h1" gutterBottom={isMobile}>
+              Mood Analytics
+            </Typography>
+            <FormControl sx={{ minWidth: isMobile ? '100%' : 120 }}>
+              <InputLabel id="time-range-label">Time Range</InputLabel>
+              <Select
+                labelId="time-range-label"
+                value={timeRange}
+                label="Time Range"
+                onChange={handleTimeRangeChange}
+              >
+                <MenuItem value="week">Last Week</MenuItem>
+                <MenuItem value="month">Last Month</MenuItem>
+                <MenuItem value="year">Last Year</MenuItem>
+                <MenuItem value="all">All Time</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 4 }}>
+              {error}
+            </Alert>
+          )}
+
+          {displayLoading ? (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '50vh',
+                gap: 2,
+              }}
+            >
+              <CircularProgress size={40} />
+              <Typography variant="body1" color="text.secondary">
+                Loading your mood analytics...
+              </Typography>
+              <Box sx={{ width: '100%', mt: 4 }}>
+                <MoodInsightsCard
+                  insights={{
+                    overallAverage: 0,
+                    highestMood: 0,
+                    lowestMood: 0,
+                    moodVolatility: 0,
+                    streakDays: 0,
+                    totalEntries: 0,
+                    moodTrends: [],
+                    dayOfWeekPatterns: [],
+                    timeOfDayPatterns: [],
+                    recentRatings: [],
+                  }}
+                  isLoading={true}
+                />
+              </Box>
+            </Box>
+          ) : (
+            renderCharts()
+          )}
         </Box>
-      </Box>
-    </Container>
+      </Container>
+    </ErrorBoundary>
   );
-}
+};
+
+export default Analytics;

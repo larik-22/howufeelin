@@ -12,6 +12,8 @@
 - [x] read / write security rules and constrains define
 - [x] add analytics page
 - [ ] analytics page proper services and loading. Test with data, test without data. Optimize with queries
+- [ ] after setting password (account linking) -> no redirect, should be fixed...
+- [ ] fix bug: sometimes when group created (slow internet connection), the group is not displayed on page immediately and refresh is needed
 - [ ] test security rules
 - [ ] auth validation of username
 - [ ] client-side validation of group name, join code etc. Create group validation error
