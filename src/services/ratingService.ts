@@ -447,9 +447,6 @@ class FirestoreRatingService implements RatingService {
       console.error('Error getting user ratings for date range:', error);
       if (error instanceof Error) {
         console.error('Error details:', error.message);
-        if ('code' in error) {
-          console.error('Error code:', (error as any).code);
-        }
       }
       return [];
     }
