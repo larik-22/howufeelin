@@ -67,6 +67,7 @@ export default function Analytics() {
 
   // Handle time range changes
   const handleTimeRangeChange = (
+    //@ts-expect-error - MUI types are not updated
     event: React.MouseEvent<HTMLElement>,
     newTimeRange: TimeRange | null
   ) => {
