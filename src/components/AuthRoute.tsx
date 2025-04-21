@@ -21,11 +21,13 @@ export default function AuthRoute({ children }: { children: React.ReactNode }) {
     return <Loading />;
   }
 
+  // Check if user is authenticated and has a password provider
+  const hasPasswordProvider = auth.firebaseUser?.providerData.some(
+    (provider: UserInfo) => provider.providerId === 'password'
+  );
+
   // If user is authenticated and has a password provider, redirect to the original page or dashboard
-  if (
-    auth.firebaseUser &&
-    auth.firebaseUser.providerData.some((provider: UserInfo) => provider.providerId === 'password')
-  ) {
+  if (auth.firebaseUser && hasPasswordProvider) {
     return <Navigate to={from} replace />;
   }
 
