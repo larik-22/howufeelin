@@ -10,6 +10,8 @@
 - [x] on group details page -> if admin, edit group and people; manage people (remove, make admin) (but think what to do with a button as well)
 - [x] filtering of groups (own, joined, all)
 - [x] read / write security rules and constrains define
+- [x] add analytics page
+- [ ] analytics page proper services and loading. Test with data, test without data. Optimize with queries
 - [ ] test security rules
 - [ ] auth validation of username
 - [ ] client-side validation of group name, join code etc. Create group validation error

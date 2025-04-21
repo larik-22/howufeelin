@@ -344,5 +344,24 @@ service cloud.firestore {
                    ((isGroupAdmin(resource.data.groupId) || isGroupCreator(resource.data.groupId)) || 
                    (resource.data.userId == request.auth.uid && resource.data.role != 'admin'));
     }
+
+    // Rules for the 'analytics_snapshots' collection
+    match /analytics_snapshots/{snapshotId} {
+      // Allow read if authenticated and the snapshot belongs to the user
+      allow read: if isAuthenticated() && 
+                 resource.data.userId == request.auth.uid;
+
+      // Allow create/update if authenticated and:
+      // 1. The snapshot belongs to the user
+      // 2. The data structure is valid
+      allow create, update: if isAuthenticated() && 
+                          request.resource.data.userId == request.auth.uid &&
+                          request.resource.data.lastUpdated is timestamp &&
+                          request.resource.data.insights is map;
+
+      // Allow delete if authenticated and the snapshot belongs to the user
+      allow delete: if isAuthenticated() && 
+                   resource.data.userId == request.auth.uid;
+    }
   }
 }

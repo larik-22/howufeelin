@@ -1,68 +1,117 @@
-import { Box, Container, Typography, useTheme, useMediaQuery } from '@mui/material';
+import {
+  Box,
+  Container,
+  Typography,
+  useTheme,
+  useMediaQuery,
+  ToggleButtonGroup,
+  ToggleButton,
+  Skeleton,
+  Paper,
+} from '@mui/material';
+import { useState, useEffect, useContext } from 'react';
 import MoodInsightsCard from '@/components/analytics/MoodInsightsCard';
 import MoodTrendChart from '@/components/analytics/MoodTrendChart';
 import DayOfWeekChart from '@/components/analytics/DayOfWeekChart';
 import TimeOfDayChart from '@/components/analytics/TimeOfDayChart';
-import { MoodInsights } from '@/types/Analytics';
-import { Timestamp } from 'firebase/firestore';
-
-// Placeholder data for testing
-const placeholderInsights: MoodInsights = {
-  overallAverage: 7.5,
-  highestMood: 9,
-  lowestMood: 4,
-  streakDays: 5,
-  totalEntries: 42,
-  moodVolatility: 1.8,
-  moodTrends: [
-    { date: '2023-05-01', averageRating: 7.2, count: 5 },
-    { date: '2023-05-02', averageRating: 8.1, count: 6 },
-    { date: '2023-05-03', averageRating: 6.8, count: 4 },
-    { date: '2023-05-04', averageRating: 7.5, count: 7 },
-    { date: '2023-05-05', averageRating: 8.3, count: 5 },
-  ],
-  dayOfWeekPatterns: [
-    { dayOfWeek: 0, averageRating: 7.8, count: 10 },
-    { dayOfWeek: 1, averageRating: 7.2, count: 8 },
-    { dayOfWeek: 2, averageRating: 7.5, count: 9 },
-    { dayOfWeek: 3, averageRating: 7.1, count: 7 },
-    { dayOfWeek: 4, averageRating: 7.9, count: 8 },
-    { dayOfWeek: 5, averageRating: 8.2, count: 6 },
-    { dayOfWeek: 6, averageRating: 8.5, count: 5 },
-  ],
-  timeOfDayPatterns: [
-    { hour: 8, averageRating: 7.2, count: 5 },
-    { hour: 12, averageRating: 7.8, count: 8 },
-    { hour: 18, averageRating: 7.5, count: 6 },
-    { hour: 20, averageRating: 8.1, count: 4 },
-  ],
-  recentRatings: [
-    {
-      ratingId: '1',
-      groupId: 'group1',
-      userId: 'user1',
-      ratingNumber: 8,
-      ratingDate: '2023-05-05',
-      notes: 'Feeling great today!',
-      createdAt: Timestamp.fromDate(new Date('2023-05-05T10:00:00')),
-      updatedAt: Timestamp.fromDate(new Date('2023-05-05T10:00:00')),
-    },
-    {
-      ratingId: '2',
-      groupId: 'group1',
-      userId: 'user2',
-      ratingNumber: 7,
-      ratingDate: '2023-05-05',
-      notes: 'Good day overall',
-      createdAt: Timestamp.fromDate(new Date('2023-05-05T11:30:00')),
-      updatedAt: Timestamp.fromDate(new Date('2023-05-05T11:30:00')),
-    },
-  ],
-};
+import { MoodInsights, TimeRange } from '@/types/Analytics';
+import { personalAnalyticsService } from '@/services/personalAnalyticsService';
+import AuthContext from '@/contexts/auth/authContext';
 
 export default function Analytics() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const auth = useContext(AuthContext);
+
+  const [insights, setInsights] = useState<MoodInsights | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [timeRange, setTimeRange] = useState<TimeRange>('month');
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    const setupSubscription = async () => {
+      if (!auth?.myUser) return;
+
+      try {
+        setLoading(true);
+        const dateRange = personalAnalyticsService.getDateRangeForTimeRange(timeRange);
+
+        // Set up subscription to mood insights
+        unsubscribe = personalAnalyticsService.subscribeToMoodInsights(
+          auth.myUser.userId,
+          dateRange,
+          newInsights => {
+            setInsights(newInsights);
+            setLoading(false);
+          }
+        );
+      } catch (error) {
+        console.error('Error setting up mood insights subscription:', error);
+        setLoading(false);
+      }
+    };
+
+    setupSubscription();
+
+    // Cleanup subscription on unmount or when dependencies change
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [auth?.myUser, timeRange]);
+
+  const handleTimeRangeChange = (
+    event: React.MouseEvent<HTMLElement>,
+    newTimeRange: TimeRange | null
+  ) => {
+    if (newTimeRange !== null) {
+      setTimeRange(newTimeRange);
+    }
+  };
+
+  const renderSkeletonCard = () => (
+    <Paper
+      elevation={0}
+      sx={{
+        p: { xs: 2, sm: 3 },
+        backdropFilter: 'blur(20px)',
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      }}
+    >
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Skeleton variant="rectangular" height={60} />
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: 2,
+          }}
+        >
+          <Skeleton variant="rectangular" height={100} />
+          <Skeleton variant="rectangular" height={100} />
+          <Skeleton variant="rectangular" height={100} />
+        </Box>
+      </Box>
+    </Paper>
+  );
+
+  const renderSkeletonChart = (height: number = 350) => (
+    <Paper
+      elevation={0}
+      sx={{
+        p: { xs: 2, sm: 3 },
+        backdropFilter: 'blur(20px)',
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+      }}
+    >
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Skeleton variant="text" width={200} height={32} />
+        <Skeleton variant="rectangular" height={height} />
+      </Box>
+    </Paper>
+  );
 
   return (
     <Container
@@ -72,17 +121,48 @@ export default function Analytics() {
         px: { xs: 2, sm: 3, md: 4 },
       }}
     >
-      <Typography
-        variant="h4"
+      <Box
         sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
           mb: { xs: 3, sm: 4, md: 6 },
-          fontWeight: 600,
-          letterSpacing: '-0.02em',
-          color: 'text.primary',
         }}
       >
-        Analytics
-      </Typography>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            color: 'text.primary',
+            mb: { xs: 2, sm: 0 },
+          }}
+        >
+          Analytics
+        </Typography>
+
+        <ToggleButtonGroup
+          value={timeRange}
+          exclusive
+          onChange={handleTimeRangeChange}
+          aria-label="time range"
+          size="small"
+        >
+          <ToggleButton value="week" aria-label="week">
+            Week
+          </ToggleButton>
+          <ToggleButton value="month" aria-label="month">
+            Month
+          </ToggleButton>
+          <ToggleButton value="year" aria-label="year">
+            Year
+          </ToggleButton>
+          <ToggleButton value="all" aria-label="all time">
+            All Time
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
 
       <Box
         sx={{
@@ -93,26 +173,22 @@ export default function Analytics() {
       >
         {/* Insights Section */}
         <Box>
-          <MoodInsightsCard insights={placeholderInsights} />
+          {loading ? renderSkeletonCard() : insights && <MoodInsightsCard insights={insights} />}
         </Box>
 
         {/* Charts Section */}
         <Box>
           {/* Mood Trends Chart */}
-          <Box
-            sx={{
-              mb: { xs: 3, sm: 4 },
-              '& .MuiPaper-root': {
-                backdropFilter: 'blur(20px)',
-                backgroundColor: 'rgba(255, 255, 255, 0.8)',
-              },
-            }}
-          >
-            <MoodTrendChart
-              trends={placeholderInsights.moodTrends}
-              title="Mood Trends"
-              height={isMobile ? 300 : 400}
-            />
+          <Box sx={{ mb: { xs: 3, sm: 4 } }}>
+            {loading
+              ? renderSkeletonChart(isMobile ? 300 : 400)
+              : insights && (
+                  <MoodTrendChart
+                    trends={insights.moodTrends}
+                    title="Mood Trends"
+                    height={isMobile ? 300 : 400}
+                  />
+                )}
           </Box>
 
           {/* Day and Time Patterns */}
@@ -124,22 +200,29 @@ export default function Analytics() {
                 md: 'repeat(2, 1fr)',
               },
               gap: { xs: 3, sm: 4 },
-              '& .MuiPaper-root': {
-                backdropFilter: 'blur(20px)',
-                backgroundColor: 'rgba(255, 255, 255, 0.8)',
-              },
             }}
           >
-            <DayOfWeekChart
-              patterns={placeholderInsights.dayOfWeekPatterns}
-              title="Day of Week Patterns"
-              height={isMobile ? 300 : 350}
-            />
-            <TimeOfDayChart
-              patterns={placeholderInsights.timeOfDayPatterns}
-              title="Time of Day Patterns"
-              height={isMobile ? 300 : 350}
-            />
+            {loading ? (
+              <>
+                {renderSkeletonChart(isMobile ? 300 : 350)}
+                {renderSkeletonChart(isMobile ? 300 : 350)}
+              </>
+            ) : (
+              insights && (
+                <>
+                  <DayOfWeekChart
+                    patterns={insights.dayOfWeekPatterns}
+                    title="Day of Week Patterns"
+                    height={isMobile ? 300 : 350}
+                  />
+                  <TimeOfDayChart
+                    patterns={insights.timeOfDayPatterns}
+                    title="Time of Day Patterns"
+                    height={isMobile ? 300 : 350}
+                  />
+                </>
+              )
+            )}
           </Box>
         </Box>
       </Box>
