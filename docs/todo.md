@@ -9,12 +9,16 @@
 - [x] real-time updates: group members, group details, group ratings
 - [x] on group details page -> if admin, edit group and people; manage people (remove, make admin) (but think what to do with a button as well)
 - [x] filtering of groups (own, joined, all)
+- [x] read / write security rules and constrains define
+- [x] add analytics page
+- [ ] after setting password (account linking) -> no redirect, should be fixed...
+- [ ] fix bug: sometimes when group created (slow internet connection), the group is not displayed on page immediately and refresh is needed
+- [ ] analytics page proper services and loading. Test with data, test without data. Optimize with queries
 - [ ] test security rules
 - [ ] auth validation of username
 - [ ] client-side validation of group name, join code etc. Create group validation error
 - [ ] colors for chart according to legend and rating
 - [ ] mobile version with better UX
 - [ ] profile page (change password, change email, change username)
-- [ ] read / write security rules and constrains define
 - [ ] improve UX: snackbars, loading, etc;
 - [ ] sync of the telegram group (auth yourself in telegram, auto create a telegram group and send invite link to all the users, possible cloud function)

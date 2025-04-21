@@ -1,5 +1,6 @@
 export const SPECIAL_USERS = {
   RIZEL: 'rzlthms11@gmail.com',
+  ILARION: 'larikpetriv@gmail.com',
 } as const;
 
 export const isSpecialUser = (email: string | null | undefined): boolean => {
@@ -11,7 +12,7 @@ export const isSpecialUser = (email: string | null | undefined): boolean => {
 
 export const isRizel = (email: string | null | undefined): boolean => {
   if (!email) return false;
-  return email === SPECIAL_USERS.RIZEL;
+  return email === SPECIAL_USERS.RIZEL || email === SPECIAL_USERS.ILARION;
 };
 
 // Development utilities

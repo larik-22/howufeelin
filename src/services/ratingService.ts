@@ -419,23 +419,35 @@ class FirestoreRatingService implements RatingService {
     endDate: string
   ): Promise<Rating[]> {
     try {
-      // Instead of making multiple individual queries, use a single query with a range
-      // This is more efficient than querying for each date individually
-      const startPrefix = `${groupId}_${startDate}_${userId}`;
-      const endPrefix = `${groupId}_${endDate}_${userId}`;
+      console.log('Getting user ratings for date range:', {
+        groupId,
+        userId,
+        startDate,
+        endDate,
+      });
 
+      // Create a query to get all ratings for the user in the group within the date range
       const q = query(
         this.ratingsCollection,
-        where('ratingId', '>=', startPrefix),
-        where('ratingId', '<=', endPrefix),
-        orderBy('ratingId'),
-        orderBy('createdAt', 'desc')
+        where('groupId', '==', groupId),
+        where('userId', '==', userId),
+        where('ratingDate', '>=', startDate),
+        where('ratingDate', '<=', endDate),
+        orderBy('ratingDate', 'desc')
       );
 
+      console.log('Executing Firestore query...');
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => doc.data() as Rating);
+      console.log(`Query returned ${querySnapshot.size} documents`);
+
+      const ratings = querySnapshot.docs.map(doc => doc.data() as Rating);
+      console.log('Ratings:', ratings);
+      return ratings;
     } catch (error) {
       console.error('Error getting user ratings for date range:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       return [];
     }
   }

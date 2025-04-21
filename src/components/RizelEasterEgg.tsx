@@ -132,11 +132,23 @@ export default function RizelEasterEgg({ open, onClose }: RizelEasterEggProps) {
           minWidth: 250,
           maxWidth: 300,
           borderRadius: 4,
-          background: `linear-gradient(135deg, ${theme.palette.primary.light}10, ${theme.palette.primary.main}20)`,
-          backdropFilter: 'blur(20px)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          zIndex: 1000,
+          background: `linear-gradient(135deg, ${theme.palette.primary.light}30, ${theme.palette.primary.main}40)`,
+          backdropFilter: 'blur(24px)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
+          zIndex: theme.zIndex.modal,
           overflow: 'hidden',
+          border: `1px solid ${theme.palette.primary.light}40`,
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 0,
+          },
         }}
       >
         <Box sx={{ position: 'relative', minHeight: 150 }}>
@@ -156,9 +168,10 @@ export default function RizelEasterEgg({ open, onClose }: RizelEasterEggProps) {
             <Typography
               variant="h6"
               sx={{
-                color: theme.palette.primary.main,
+                color: theme.palette.primary.dark,
                 fontWeight: 600,
                 mb: 1,
+                textShadow: '0 1px 2px rgba(255,255,255,0.5)',
               }}
             >
               {messages[currentMessage]}
@@ -166,9 +179,10 @@ export default function RizelEasterEgg({ open, onClose }: RizelEasterEggProps) {
             <Typography
               variant="body2"
               sx={{
-                color: theme.palette.text.secondary,
+                color: theme.palette.primary.dark,
                 fontStyle: 'italic',
                 mb: 2,
+                opacity: 0.9,
               }}
             >
               You will defeat them all 💪
