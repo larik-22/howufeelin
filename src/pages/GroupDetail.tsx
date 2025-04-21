@@ -21,6 +21,7 @@ import { GroupMember } from '@/types/GroupMember';
 import { GroupMemberRole } from '@/types/GroupMemberRole';
 import { Rating } from '@/types/Rating';
 import { useGroupPermissions, GroupPermission } from '@/hooks/useGroupPermissions';
+import { useLoadingState } from '@/hooks/useLoadingState';
 import { copyToClipboard } from '@/utils/clipboard';
 import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
 import { useLeaveGroup } from '@/hooks/useLeaveGroup';
@@ -68,7 +69,8 @@ export default function GroupDetail() {
   );
   const [memberCount, setMemberCount] = useState<number>(loaderMemberCount || 0);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>(loaderMembers || []);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRatingLoading, setIsRatingLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -81,6 +83,14 @@ export default function GroupDetail() {
   // New state for Group Members Dialog
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  // Use our custom loading state hooks
+  const displayLoading = useLoadingState(isLoading, [groupId, auth?.myUser?.userId]);
+  const displayRatingLoading = useLoadingState(isRatingLoading, [
+    groupId,
+    auth?.myUser?.userId,
+    selectedDate,
+  ]);
 
   // Use our custom hook for leave group functionality
   const {
@@ -115,6 +125,8 @@ export default function GroupDetail() {
   useEffect(() => {
     if (!groupId || !auth?.myUser?.userId) return;
 
+    setIsLoading(true);
+
     // Subscribe to group updates
     const groupUnsubscribe = groupService.subscribeToGroup(groupId, updatedGroup => {
       if (updatedGroup) {
@@ -127,6 +139,7 @@ export default function GroupDetail() {
         // Group was deleted or user was removed
         navigate('/dashboard?error=not_member');
       }
+      setIsLoading(false);
     });
 
     // Subscribe to group members updates
@@ -160,6 +173,7 @@ export default function GroupDetail() {
     return () => {
       groupUnsubscribe();
       membersUnsubscribe();
+      setIsLoading(false);
     };
   }, [groupId, auth?.myUser?.userId, navigate]);
 
@@ -168,7 +182,7 @@ export default function GroupDetail() {
     if (!groupId || !auth?.myUser?.userId) return;
     if (!auth.myUser) return;
 
-    setLoading(true);
+    setIsRatingLoading(true);
     setError(null);
 
     // Get today's date in YYYY-MM-DD format
@@ -206,7 +220,7 @@ export default function GroupDetail() {
       } catch (err) {
         console.error('Error checking if user rated today:', err);
       } finally {
-        setLoading(false);
+        setIsRatingLoading(false);
       }
     };
 
@@ -216,6 +230,7 @@ export default function GroupDetail() {
     return () => {
       todayRatingsUnsubscribe();
       calendarRatingsUnsubscribe();
+      setIsRatingLoading(false);
     };
   }, [groupId, auth?.myUser?.userId]);
 
@@ -294,7 +309,7 @@ export default function GroupDetail() {
     if (!groupId || !auth?.myUser?.userId) return;
 
     try {
-      setLoading(true);
+      setIsRatingLoading(true);
 
       // Create the rating
       await ratingService.createRating(groupId, auth.myUser.userId, rating, note);
@@ -335,7 +350,7 @@ export default function GroupDetail() {
         type: errorType,
       });
     } finally {
-      setLoading(false);
+      setIsRatingLoading(false);
     }
   };
 
@@ -397,7 +412,7 @@ export default function GroupDetail() {
     }
   };
 
-  if (loading) {
+  if (displayLoading) {
     return (
       <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, maxWidth: 1200, mx: 'auto' }}>
         {/* Header Skeleton */}
@@ -497,7 +512,7 @@ export default function GroupDetail() {
             copiedCode={copiedCode}
             getRoleLabel={getRoleLabel}
             getRoleColor={getRoleColor}
-            loading={loading}
+            loading={displayLoading}
             groupMembers={groupMembers}
             onEdit={handleOpenEditDialog}
             canEdit={hasPermission(group, GroupPermission.EDIT_GROUP)}
@@ -526,13 +541,17 @@ export default function GroupDetail() {
 
           {activeTab === 0 && (
             <Box>
-              <MoodInput onSubmit={handleMoodSubmit} hasRatedToday={hasRatedToday} />
+              <MoodInput
+                onSubmit={handleMoodSubmit}
+                hasRatedToday={hasRatedToday}
+                isLoading={displayRatingLoading}
+              />
 
-              {/* Display today's ratings using the RatingList component */}
               <RatingList
                 ratings={todayRatings}
                 groupMembers={groupMembers}
                 title="Today's Moods"
+                isLoading={displayRatingLoading}
               />
             </Box>
           )}
@@ -549,7 +568,7 @@ export default function GroupDetail() {
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
               onDateSelected={handleCalendarDateSelected}
-              isLoading={loading}
+              isLoading={displayRatingLoading}
             />
           )}
 
@@ -566,7 +585,7 @@ export default function GroupDetail() {
               }))}
               getRoleLabel={getRoleLabel}
               getRoleColor={getRoleColor}
-              loading={loading}
+              loading={displayLoading}
               onManageMembers={handleOpenMembersDialog}
               canManageMembers={hasPermission(group, GroupPermission.MANAGE_MEMBERS)}
             />

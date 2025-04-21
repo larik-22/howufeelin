@@ -1,4 +1,4 @@
-import { Box, Card, CardContent, Typography, Avatar, Chip, Divider } from '@mui/material';
+import { Box, Card, CardContent, Typography, Avatar, Chip, Divider, Skeleton } from '@mui/material';
 import { Rating } from '@/types/Rating';
 import { GroupMember } from '@/types/GroupMember';
 import SentimentVeryDissatisfiedIcon from '@mui/icons-material/SentimentVeryDissatisfied';
@@ -12,9 +12,15 @@ interface RatingListProps {
   ratings: Rating[];
   groupMembers: GroupMember[];
   title?: string;
+  isLoading?: boolean;
 }
 
-export const RatingList = ({ ratings, groupMembers, title = "Today's Moods" }: RatingListProps) => {
+export const RatingList = ({
+  ratings,
+  groupMembers,
+  title = "Today's Moods",
+  isLoading = false,
+}: RatingListProps) => {
   const theme = useTheme();
 
   const getMoodEmoji = (rating: number) => {
@@ -55,6 +61,34 @@ export const RatingList = ({ ratings, groupMembers, title = "Today's Moods" }: R
     const userInitial = getMemberName(userId)[0]?.toUpperCase() || 'U';
     return userInitial;
   };
+
+  if (isLoading) {
+    return (
+      <Card sx={{ mt: 3, boxShadow: 3, borderRadius: 2 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {title}
+          </Typography>
+          {[1, 2, 3].map(index => (
+            <Box key={index}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Skeleton variant="circular" width={40} height={40} sx={{ mr: 2 }} />
+                <Box sx={{ flexGrow: 1 }}>
+                  <Skeleton variant="text" width={120} sx={{ mb: 0.5 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Skeleton variant="rounded" width={80} height={24} sx={{ mr: 1 }} />
+                    <Skeleton variant="text" width={60} />
+                  </Box>
+                </Box>
+              </Box>
+              <Skeleton variant="text" width="60%" sx={{ ml: 7, mb: 1 }} />
+              {index < 2 && <Divider sx={{ my: 1.5 }} />}
+            </Box>
+          ))}
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (ratings.length === 0) {
     return (
