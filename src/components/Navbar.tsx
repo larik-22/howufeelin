@@ -101,7 +101,7 @@ export default function Navbar() {
             {isRizelUser && (
               <Box sx={{ position: 'relative', zIndex: theme.zIndex.modal }}>
                 {!heartExpanded && (
-                  <Tooltip title="Click for a surprise!">
+                  <Tooltip title="Secret page for the Queen">
                     <IconButton
                       onClick={() => setHeartExpanded(!heartExpanded)}
                       sx={{

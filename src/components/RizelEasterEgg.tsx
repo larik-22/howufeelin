@@ -70,17 +70,7 @@ const HeartIcon = styled(FavoriteIcon)(({ theme }) => ({
   fontSize: '2rem',
 }));
 
-const messages = [
-  'Hi Rizel! 💖',
-  "You're so slay 🎀",
-  "You're beautiful 🌸",
-  "You're incredible 🌟",
-  "You're so smart 🧠",
-  "You're so kind...",
-  "You're talented 🎨",
-  "You're so sweet 🍬",
-  "You're wonderful 💫",
-];
+const messages = ['Hi Rizel! 💖'];
 
 interface RizelEasterEggProps {
   open: boolean;

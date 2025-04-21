@@ -281,10 +281,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       // Allow create if authenticated, user is a member of the group (not banned), hasn't rated today, and data is valid
+      // don't forget to uncomment this when we have analytics page
       allow create: if isAuthenticated() && 
-                   isGroupMember(request.resource.data.groupId) && 
-                   !hasRatedToday(request.resource.data.groupId) && 
-                   isValidNewRatingData();
+                    isGroupMember(request.resource.data.groupId) && 
+                    !hasRatedToday(request.resource.data.groupId) && 
+                    isValidNewRatingData();
+
 
       // Allow delete if:
       // 1. User is the owner of the rating, OR
