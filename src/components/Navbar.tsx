@@ -18,6 +18,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import AuthContext from '@/contexts/auth/authContext';
 import { isRizel } from '@/utils/specialUsers';
 import RizelEasterEgg from './RizelEasterEgg';
@@ -95,6 +96,13 @@ export default function Navbar() {
                 <RizelEasterEgg open={heartExpanded} onClose={() => setHeartExpanded(false)} />
               </Box>
             )}
+
+            <Tooltip title="Analytics">
+              <IconButton component={Link} to="/analytics" sx={{ mr: 2 }}>
+                <BarChartIcon />
+              </IconButton>
+            </Tooltip>
+
             <IconButton
               onClick={handleClick}
               size="small"

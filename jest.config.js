@@ -1,7 +1,7 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['**/*.firebase.test.ts'],
+  testMatch: ['**/*.firebase.test.ts', '**/security-rules/**/*.test.ts'],
   setupFiles: ['<rootDir>/tests/setup.ts'],
   moduleFileExtensions: ['ts', 'js'],
   transform: {
