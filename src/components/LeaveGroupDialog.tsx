@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { Group } from '@/types/Group';
 import { groupService } from '@/services/groupService';
+import { useLoadingState } from '@/hooks/useLoadingState';
 
 interface LeaveGroupDialogProps {
   open: boolean;
@@ -33,6 +34,9 @@ export default function LeaveGroupDialog({
   const [isLeaving, setIsLeaving] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Use our custom loading state hook
+  const displayLeaving = useLoadingState(isLeaving, [open, group.groupId]);
 
   const handleLeaveGroup = async () => {
     if (!group.groupId || !userId) return;
@@ -57,16 +61,16 @@ export default function LeaveGroupDialog({
   return (
     <Dialog
       open={open}
-      onClose={!isLeaving ? onClose : undefined}
+      onClose={!displayLeaving ? onClose : undefined}
       aria-labelledby="leave-group-dialog-title"
       aria-describedby="leave-group-dialog-description"
-      disableEscapeKeyDown={isLeaving}
+      disableEscapeKeyDown={displayLeaving}
       fullScreen={isMobile}
     >
       <DialogTitle id="leave-group-dialog-title">Leave Group</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          {isLeaving ? <CircularProgress size={24} sx={{ mr: 2 }} /> : null}
+          {displayLeaving ? <CircularProgress size={24} sx={{ mr: 2 }} /> : null}
           <Box>
             Are you sure you want to leave "{group.groupName}"? You will need to be invited again to
             rejoin.
@@ -74,17 +78,17 @@ export default function LeaveGroupDialog({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={isLeaving} color="primary">
+        <Button onClick={onClose} disabled={displayLeaving} color="primary">
           Cancel
         </Button>
         <Button
           onClick={handleLeaveGroup}
           color="error"
           variant="contained"
-          disabled={isLeaving}
-          startIcon={isLeaving ? <CircularProgress size={20} color="inherit" /> : null}
+          disabled={displayLeaving}
+          startIcon={displayLeaving ? <CircularProgress size={20} color="inherit" /> : null}
         >
-          {isLeaving ? 'Leaving...' : 'Leave Group'}
+          {displayLeaving ? 'Leaving...' : 'Leave Group'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -34,6 +34,7 @@ import { Group } from '@/types/Group';
 import { GroupMember } from '@/types/GroupMember';
 import { MyUser } from '@/types/MyUser';
 import { GroupMemberRole } from '@/types/GroupMemberRole';
+import { useLoadingState } from '@/hooks/useLoadingState';
 import {
   getRoleColor,
   getRoleLabel,
@@ -69,6 +70,10 @@ export default function GroupMembersDialog({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedMember, setSelectedMember] = useState<GroupMember | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Use our custom loading state hooks
+  const displayLoading = useLoadingState(isLoading, [open, group.groupId]);
+  const displayUpdating = useLoadingState(isUpdating, [selectedMember?.userId]);
 
   // Subscribe to group members updates
   useEffect(() => {
@@ -114,22 +119,10 @@ export default function GroupMembersDialog({
 
     try {
       setIsUpdating(true);
-
-      // Check if trying to make someone an admin when there's already an admin
-      if (newRole === GroupMemberRole.ADMIN) {
-        const existingAdmin = members.find(m => m.role === GroupMemberRole.ADMIN);
-        if (existingAdmin && existingAdmin.userId !== selectedMember.userId) {
-          setNotification({
-            message: 'A group can only have one admin (the creator)',
-            type: 'error',
-          });
-          handleMenuClose();
-          setIsUpdating(false);
-          return;
-        }
-      }
-
+      setError(null);
       await groupService.updateMemberRole(group.groupId, selectedMember.userId, newRole);
+      setSelectedMember(null);
+      setAnchorEl(null);
 
       // Notify parent component of the role update
       if (onMemberUpdate) {
@@ -143,14 +136,8 @@ export default function GroupMembersDialog({
         message: `Role updated to ${getRoleLabel(newRole)}`,
         type: 'success',
       });
-
-      handleMenuClose();
     } catch (err) {
-      console.error('Error updating member role:', err);
-      setNotification({
-        message: 'Failed to update member role',
-        type: 'error',
-      });
+      setError(err instanceof Error ? err.message : 'Failed to update member role');
     } finally {
       setIsUpdating(false);
     }
@@ -164,6 +151,7 @@ export default function GroupMembersDialog({
       setError(null);
       await groupService.updateMemberRole(group.groupId, member.userId, GroupMemberRole.BANNED);
       setSelectedMember(null);
+      setAnchorEl(null);
       setNotification({
         message: `${member.displayName} has been banned from the group`,
         type: 'success',
@@ -183,6 +171,7 @@ export default function GroupMembersDialog({
       setError(null);
       await groupService.updateMemberRole(group.groupId, member.userId, GroupMemberRole.MEMBER);
       setSelectedMember(null);
+      setAnchorEl(null);
       setNotification({
         message: `${member.displayName} has been unbanned from the group`,
         type: 'success',
@@ -202,6 +191,7 @@ export default function GroupMembersDialog({
       setError(null);
       await groupService.removeMemberFromGroup(group.groupId, member.userId);
       setSelectedMember(null);
+      setAnchorEl(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove member');
     } finally {
@@ -237,7 +227,7 @@ export default function GroupMembersDialog({
             </Alert>
           )}
 
-          {isLoading ? (
+          {displayLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
@@ -375,17 +365,24 @@ export default function GroupMembersDialog({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>Close</Button>
+          <Button onClick={handleClose} disabled={displayUpdating}>
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
 
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        onClick={handleMenuClose}
+      >
         {selectedMember &&
           selectedMember.role !== GroupMemberRole.MODERATOR &&
           selectedMember.role !== GroupMemberRole.BANNED && (
             <MenuItem
               onClick={() => handleUpdateRole(GroupMemberRole.MODERATOR)}
-              disabled={isUpdating}
+              disabled={displayUpdating}
             >
               Make Moderator
             </MenuItem>
@@ -395,7 +392,7 @@ export default function GroupMembersDialog({
           selectedMember.role !== GroupMemberRole.BANNED && (
             <MenuItem
               onClick={() => handleUpdateRole(GroupMemberRole.MEMBER)}
-              disabled={isUpdating}
+              disabled={displayUpdating}
             >
               Make Member
             </MenuItem>
@@ -410,7 +407,7 @@ export default function GroupMembersDialog({
           selectedMember.role !== GroupMemberRole.BANNED && (
             <MenuItem
               onClick={() => handleBanMember(selectedMember)}
-              disabled={isUpdating}
+              disabled={displayUpdating}
               sx={{ color: 'error.main' }}
             >
               <BlockIcon fontSize="small" sx={{ mr: 1 }} />
@@ -427,7 +424,7 @@ export default function GroupMembersDialog({
           ) && (
             <MenuItem
               onClick={() => handleUnbanMember(selectedMember)}
-              disabled={isUpdating}
+              disabled={displayUpdating}
               sx={{ color: 'success.main' }}
             >
               <CheckCircleIcon fontSize="small" sx={{ mr: 1 }} />
@@ -443,7 +440,7 @@ export default function GroupMembersDialog({
           ) && (
             <MenuItem
               onClick={() => handleRemoveMember(selectedMember)}
-              disabled={isUpdating}
+              disabled={displayUpdating}
               sx={{ color: 'error.main' }}
             >
               <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
