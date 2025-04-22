@@ -124,10 +124,3 @@ The application requires several environment variables to be set. See `.env.exam
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Firebase for backend services
-- Material-UI for component library
-- React team for the amazing framework
-- Github Actions for simple CI/CD

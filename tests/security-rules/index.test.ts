@@ -9,6 +9,7 @@
 import './users/users.test';
 import './groups/groups.test';
 import './ratings/ratings.test';
+import './rateLimits/index.test';
 
 // Import other collection tests as they are created
 // import './ratings/ratings.test';
