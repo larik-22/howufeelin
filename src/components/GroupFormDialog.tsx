@@ -19,6 +19,8 @@ import { Group } from '@/types/Group';
 import { MyUser } from '@/types/MyUser';
 import { useLoadingState } from '@/hooks/useLoadingState';
 import { copyToClipboard } from '@/utils/clipboard';
+import { GroupMemberRole } from '@/types/GroupMemberRole';
+import { Timestamp } from 'firebase/firestore';
 
 // Validation constants
 export const MAX_GROUP_NAME_LENGTH = 50;
@@ -225,6 +227,24 @@ export default function GroupFormDialog({
   };
 
   const handleSuccessClose = () => {
+    // If we have a created group, pass it to the parent component
+    if (createdGroup) {
+      // Create a minimal group object with the necessary information
+      const newGroup: Group = {
+        groupId: createdGroup.groupId,
+        groupName,
+        groupDescription,
+        createdBy: user.userId,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        joinCode: createdGroup.joinCode,
+        userRole: GroupMemberRole.ADMIN, // The creator is always an admin
+      };
+
+      // Notify parent of the new group for immediate local state update
+      onSubmit(newGroup);
+    }
+
     // Close the dialog and reset state
     handleClose();
 

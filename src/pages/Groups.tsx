@@ -216,9 +216,27 @@ export default function Groups() {
     setSelectedGroup(null);
   };
 
-  const handleGroupCreated = () => {
-    // The real-time subscription will handle updating the groups list
-    // We just need to show a success notification
+  const handleGroupCreated = (newGroup: Group) => {
+    // Add the new group to the local state immediately
+    setGroups(prevGroups => {
+      // Check if the group already exists in the list
+      const exists = prevGroups.some(group => group.groupId === newGroup.groupId);
+      if (exists) {
+        // Update the existing group
+        return prevGroups.map(group => (group.groupId === newGroup.groupId ? newGroup : group));
+      } else {
+        // Add the new group to the list
+        return [...prevGroups, newGroup];
+      }
+    });
+
+    // Update member counts for the new group
+    setMemberCounts(prevCounts => ({
+      ...prevCounts,
+      [newGroup.groupId]: 1, // The creator is the first member
+    }));
+
+    // Show success notification
     setNotification({
       message:
         dialogMode === 'create' ? 'Group created successfully' : 'Group updated successfully',

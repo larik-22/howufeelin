@@ -100,7 +100,23 @@ export default function Navbar() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {isRizelUser && (
               <Box sx={{ position: 'relative', zIndex: theme.zIndex.modal }}>
-                <Tooltip title="Click for a surprise!">
+                {!heartExpanded && (
+                  <Tooltip title="Secret page for the Queen">
+                    <IconButton
+                      onClick={() => setHeartExpanded(!heartExpanded)}
+                      sx={{
+                        color: theme.palette.primary.main,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          transform: 'scale(1.1) rotate(5deg)',
+                        },
+                      }}
+                    >
+                      <FavoriteIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {heartExpanded && (
                   <IconButton
                     onClick={() => setHeartExpanded(!heartExpanded)}
                     sx={{
@@ -113,7 +129,7 @@ export default function Navbar() {
                   >
                     <FavoriteIcon />
                   </IconButton>
-                </Tooltip>
+                )}
                 <RizelEasterEgg open={heartExpanded} onClose={() => setHeartExpanded(false)} />
               </Box>
             )}
