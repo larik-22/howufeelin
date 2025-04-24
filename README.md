@@ -106,12 +106,6 @@ The application requires several environment variables to be set. See `.env.exam
 4. Configure Firebase Hosting
 5. Copy your Firebase configuration to your environment files
 
-### Security Considerations
-
-- All environment files (`.env`, `.env.development`, `.env.test`) are git-ignored
-- Firebase security rules are enforced at the database level
-- Authentication is handled through Firebase Auth
-- API keys are restricted through Firebase Console settings
 
 ## 📝 Contributing
 
