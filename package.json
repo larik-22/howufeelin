@@ -15,6 +15,7 @@
     "test:rules": "firebase emulators:exec --only firestore,auth 'dotenv -e .env.test -- jest tests/security-rules/index.test.ts'"
   },
   "dependencies": {
+    "@emailjs/browser": "4.4.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fontsource/playfair-display": "5.2.5",

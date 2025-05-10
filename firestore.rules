@@ -280,12 +280,14 @@ service cloud.firestore {
       // We'll rely on the client-side filtering instead
       allow read: if isAuthenticated();
 
+      //TODO change after dev data is seeded testing
+      allow create: if true;
       // Allow create if authenticated, user is a member of the group (not banned), hasn't rated today, and data is valid
       // don't forget to uncomment this when we have analytics page
-      allow create: if isAuthenticated() && 
-                    isGroupMember(request.resource.data.groupId) && 
-                    !hasRatedToday(request.resource.data.groupId) && 
-                    isValidNewRatingData();
+      //sallow create: if isAuthenticated() && 
+      //              isGroupMember(request.resource.data.groupId) && 
+      //              !hasRatedToday(request.resource.data.groupId) && 
+      //              isValidNewRatingData();
 
 
       // Allow delete if:

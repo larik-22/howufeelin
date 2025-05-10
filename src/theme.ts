@@ -4,7 +4,7 @@ import { isRizel } from '@/utils/specialUsers';
 const getPrimaryColor = (email: string | null | undefined) => {
   if (isRizel(email)) {
     return {
-      main: '#FFB5C5', // Pastel pink
+      main: '#ECB8CF', // Pastel pink
       light: '#FFD1DB', // Lighter pink
       dark: '#FF8BA7', // Darker pink
       contrastText: '#2C3E50', // Dark blue-gray for contrast

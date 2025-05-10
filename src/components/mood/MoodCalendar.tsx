@@ -88,7 +88,7 @@ export const MoodCalendar = ({
   };
 
   // Get color based on rating value
-  const getRatingColor = (rating: number) => {
+  const getBarColor = (rating: number) => {
     if (rating <= 3) return theme.palette.error.main;
     if (rating <= 6) return theme.palette.warning.main;
     return theme.palette.success.main;
@@ -96,19 +96,48 @@ export const MoodCalendar = ({
 
   // Get chart data for the selected date
   const getChartData = () => {
+    // Use the actual ratings data for the selected date
+    const data = selectedDateRatings;
+
+    // Calculate the maximum label length to determine bottom margin
+    const maxLabelLength = Math.max(...data.map(r => r.username.length));
+    const bottomMargin = Math.max(80, 40 + maxLabelLength * 4); // Base margin + extra space for long labels
+
+    // Create color map based on rating values
+    const barColors = data.map(r => {
+      if (r.rating <= 3) return theme.palette.error.main;
+      if (r.rating <= 6) return theme.palette.warning.main;
+      return theme.palette.success.main;
+    });
+
     return {
       xAxis: [
         {
-          data: selectedDateRatings.map(r => r.username),
+          data: data.map(r => r.username),
           scaleType: 'band' as const,
+          tickLabelStyle: {
+            angle: -45,
+            textAnchor: 'end' as const,
+            fontSize: 12,
+          },
+          colorMap: {
+            type: 'ordinal' as const,
+            values: data.map(r => r.username),
+            colors: barColors,
+          },
         },
       ],
       series: [
         {
-          data: selectedDateRatings.map(r => r.rating),
-          color: theme.palette.primary.main,
+          data: data.map(r => r.rating),
+          label: 'Rating',
+          valueFormatter: (value: number | null, context: { dataIndex: number }) => {
+            if (value === null) return '';
+            return `${data[context.dataIndex].username}: ${value}`;
+          },
         },
       ],
+      bottomMargin,
     };
   };
 
@@ -118,7 +147,7 @@ export const MoodCalendar = ({
     const dateStr = day.format('YYYY-MM-DD');
     const hasRatings = hasRatingsForDate(dateStr);
     const avgRating = getAverageRatingForDate(dateStr);
-    const ratingColor = getRatingColor(avgRating);
+    const ratingColor = getBarColor(avgRating);
 
     return (
       <Tooltip
@@ -370,16 +399,16 @@ export const MoodCalendar = ({
                       height={300}
                       series={chartData.series}
                       xAxis={chartData.xAxis}
-                      margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
-                      colors={[
-                        theme.palette.error.main,
-                        theme.palette.warning.main,
-                        theme.palette.success.main,
-                        theme.palette.info.main,
-                        theme.palette.secondary.main,
-                      ]}
-                      borderRadius={4}
-                      tooltip={{ trigger: 'item' }}
+                      margin={{ top: 10, bottom: chartData.bottomMargin, left: 40, right: 10 }}
+                      borderRadius={8}
+                      slotProps={{
+                        legend: {
+                          hidden: true,
+                        },
+                      }}
+                      tooltip={{
+                        trigger: 'item',
+                      }}
                       axisHighlight={{
                         x: 'band',
                         y: 'line',
