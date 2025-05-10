@@ -102,7 +102,7 @@ export const devDataService = {
         userId: testUser.userId,
         ratingDate: yesterdayDate,
         ratingNumber: yesterdayRating,
-        comment: yesterdayComment,
+        notes: yesterdayComment,
         createdAt: now,
         updatedAt: now,
       });

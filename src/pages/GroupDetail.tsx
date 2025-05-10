@@ -564,6 +564,7 @@ export default function GroupDetail() {
                   groupMembers.find(m => m.userId === rating.userId)?.displayName || 'Unknown',
                 rating: rating.ratingNumber,
                 date: rating.ratingDate,
+                notes: rating.notes,
               }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}

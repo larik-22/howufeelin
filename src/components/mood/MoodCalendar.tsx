@@ -22,6 +22,7 @@ interface Rating {
   username: string;
   rating: number;
   date: string;
+  notes?: string;
 }
 
 interface MoodCalendarProps {
@@ -323,6 +324,7 @@ export const MoodCalendar = ({
             display: 'flex',
             flexDirection: { xs: 'column', md: 'row' },
             gap: 3,
+            height: { md: 600 },
           }}
         >
           <Box
@@ -333,6 +335,7 @@ export const MoodCalendar = ({
               border: `1px solid ${theme.palette.divider}`,
               borderRadius: 1,
               position: 'relative',
+              height: '100%',
             }}
           >
             {isLoading ? (
@@ -343,8 +346,8 @@ export const MoodCalendar = ({
                   sx={{
                     display: 'flex',
                     justifyContent: 'center',
-                    alignItems: 'center',
-                    flex: 1,
+                    alignItems: 'flex-start',
+                    height: '100%',
                     p: 2,
                   }}
                 >
@@ -356,8 +359,9 @@ export const MoodCalendar = ({
                     }}
                     sx={{
                       width: '100%',
-                      height: '100%',
-                      flex: 1,
+                      '& .MuiPickersCalendarHeader-root': {
+                        marginTop: 0,
+                      },
                       '& .MuiPickersDay-root': {
                         width: 36,
                         height: 36,
@@ -384,16 +388,18 @@ export const MoodCalendar = ({
               borderRadius: 1,
               p: 2,
               position: 'relative',
+              height: '100%',
+              overflow: 'hidden',
             }}
           >
             {isLoading ? (
               renderChartSkeleton()
             ) : (
-              <>
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Typography variant="subtitle1" sx={{ mb: 2 }}>
                   Ratings for {selectedDate.format('MMMM D, YYYY')}
                 </Typography>
-                <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
+                <Box sx={{ flex: '0 0 300px', width: '100%' }}>
                   {selectedDateRatings.length > 0 ? (
                     <BarChart
                       height={300}
@@ -433,7 +439,79 @@ export const MoodCalendar = ({
                     </Box>
                   )}
                 </Box>
-              </>
+
+                {/* Comments Section */}
+                {selectedDateRatings.length > 0 && (
+                  <Box
+                    sx={{ mt: 2, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+                  >
+                    <Typography variant="subtitle1" sx={{ mb: 2 }}>
+                      Comments
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        flex: 1,
+                        overflowY: 'auto',
+                        p: 1,
+                      }}
+                    >
+                      {selectedDateRatings
+                        .filter(rating => rating.notes)
+                        .map(rating => (
+                          <Paper
+                            key={rating.userId}
+                            elevation={0}
+                            sx={{
+                              p: 2,
+                              border: `1px solid ${theme.palette.divider}`,
+                              borderRadius: 2,
+                              bgcolor: 'background.paper',
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <Typography variant="subtitle2" sx={{ mr: 1 }}>
+                                {rating.username}
+                              </Typography>
+                              <Chip
+                                label={`Rating: ${rating.rating}`}
+                                size="small"
+                                sx={{
+                                  bgcolor: getBarColor(rating.rating),
+                                  color: 'white',
+                                  '& .MuiChip-label': {
+                                    px: 1,
+                                  },
+                                }}
+                              />
+                            </Box>
+                            <Typography variant="body2" color="text.secondary">
+                              {rating.notes}
+                            </Typography>
+                          </Paper>
+                        ))}
+                      {selectedDateRatings.filter(rating => rating.notes).length === 0 && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            p: 3,
+                            border: `1px dashed ${theme.palette.divider}`,
+                            borderRadius: 2,
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            No comments for this date
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             )}
           </Box>
         </Box>
