@@ -23,6 +23,8 @@ import {
 import { db } from '@/firebase';
 import { Rating, RATING_MIN, RATING_MAX, isValidRating, createRatingId } from '@/types/Rating';
 import { analyticsService } from '@/services/analyticsService';
+import { emailService } from './emailService';
+import { groupService } from './groupService';
 
 export class RatingError extends Error {
   constructor(message: string, public code: string) {
@@ -271,6 +273,42 @@ class FirestoreRatingService implements RatingService {
 
       // Track rating submission
       analyticsService.trackRatingSubmit(groupId, ratingNumber);
+
+      // Send email notifications to group members
+      try {
+        // Get group and member information
+        const [group, members] = await Promise.all([
+          groupService.getGroupById(groupId),
+          groupService.getGroupMembers(groupId),
+        ]);
+
+        if (group) {
+          // Get the user who created the rating
+          const ratingUser = members.find(m => m.userId === userId);
+
+          if (ratingUser) {
+            // Send notifications to all other members
+            const notificationPromises = members
+              .filter(member => member.userId !== userId && member.email)
+              .map(member =>
+                emailService.sendRatingNotification({
+                  to_email: member.email!,
+                  to_name: member.displayName,
+                  from_name: ratingUser.displayName,
+                  group_name: group.groupName,
+                  rating: ratingNumber,
+                  note: notes,
+                })
+              );
+
+            // Send notifications in parallel
+            await Promise.allSettled(notificationPromises);
+          }
+        }
+      } catch (error) {
+        // Log error but don't fail the rating creation
+        console.error('Failed to send email notifications:', error);
+      }
 
       return rating;
     } catch (error) {
