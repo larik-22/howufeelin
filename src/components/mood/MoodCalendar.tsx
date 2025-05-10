@@ -333,9 +333,11 @@ export const MoodCalendar = ({
               display: 'flex',
               flexDirection: 'column',
               border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 1,
+              borderRadius: 2,
               position: 'relative',
               height: '100%',
+              bgcolor: 'background.paper',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
             }}
           >
             {isLoading ? (
@@ -361,16 +363,34 @@ export const MoodCalendar = ({
                       width: '100%',
                       '& .MuiPickersCalendarHeader-root': {
                         marginTop: 0,
+                        padding: '8px 0',
                       },
                       '& .MuiPickersDay-root': {
                         width: 36,
                         height: 36,
                         margin: '0 2px',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        '&:hover': {
+                          backgroundColor: `${theme.palette.primary.main}15`,
+                        },
                       },
                       '& .MuiPickersDay-root.Mui-selected': {
                         backgroundColor: theme.palette.primary.main,
+                        color: 'white',
+                        fontWeight: 600,
                         '&:hover': {
                           backgroundColor: theme.palette.primary.dark,
+                        },
+                      },
+                      '& .MuiPickersCalendarHeader-label': {
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                      },
+                      '& .MuiPickersArrowSwitcher-button': {
+                        color: theme.palette.text.secondary,
+                        '&:hover': {
+                          backgroundColor: `${theme.palette.primary.main}15`,
                         },
                       },
                     }}
@@ -385,19 +405,37 @@ export const MoodCalendar = ({
               display: 'flex',
               flexDirection: 'column',
               border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 1,
+              borderRadius: 2,
               p: 2,
               position: 'relative',
               height: '100%',
               overflow: 'hidden',
+              bgcolor: 'background.paper',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
             }}
           >
             {isLoading ? (
               renderChartSkeleton()
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                  Ratings for {selectedDate.format('MMMM D, YYYY')}
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    color: theme.palette.text.primary,
+                    fontWeight: 600,
+                  }}
+                >
+                  {selectedDate.format('MMMM D, YYYY')}
+                  <Chip
+                    label={`${selectedDateRatings.length} ratings`}
+                    size="small"
+                    color="primary"
+                    sx={{ ml: 1 }}
+                  />
                 </Typography>
                 <Box sx={{ flex: '0 0 300px', width: '100%' }}>
                   {selectedDateRatings.length > 0 ? (
@@ -445,9 +483,30 @@ export const MoodCalendar = ({
                   <Box
                     sx={{ mt: 2, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
                   >
-                    <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                      Comments
-                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        mb: 2,
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          fontWeight: 600,
+                          color: theme.palette.text.primary,
+                        }}
+                      >
+                        Comments
+                      </Typography>
+                      <Chip
+                        label={`${selectedDateRatings.filter(r => r.notes).length} comments`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
                     <Box
                       sx={{
                         display: 'flex',
@@ -456,6 +515,19 @@ export const MoodCalendar = ({
                         flex: 1,
                         overflowY: 'auto',
                         p: 1,
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          background: 'transparent',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          background: theme.palette.divider,
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb:hover': {
+                          background: theme.palette.action.hover,
+                        },
                       }}
                     >
                       {selectedDateRatings
@@ -469,10 +541,28 @@ export const MoodCalendar = ({
                               border: `1px solid ${theme.palette.divider}`,
                               borderRadius: 2,
                               bgcolor: 'background.paper',
+                              transition: 'all 0.2s ease-in-out',
+                              '&:hover': {
+                                borderColor: theme.palette.primary.main,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                              },
                             }}
                           >
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                              <Typography variant="subtitle2" sx={{ mr: 1 }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                mb: 1,
+                                gap: 1,
+                              }}
+                            >
+                              <Typography
+                                variant="subtitle2"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: theme.palette.text.primary,
+                                }}
+                              >
                                 {rating.username}
                               </Typography>
                               <Chip
@@ -481,13 +571,21 @@ export const MoodCalendar = ({
                                 sx={{
                                   bgcolor: getBarColor(rating.rating),
                                   color: 'white',
+                                  fontWeight: 500,
                                   '& .MuiChip-label': {
                                     px: 1,
                                   },
                                 }}
                               />
                             </Box>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                lineHeight: 1.6,
+                                whiteSpace: 'pre-wrap',
+                              }}
+                            >
                               {rating.notes}
                             </Typography>
                           </Paper>
@@ -501,6 +599,7 @@ export const MoodCalendar = ({
                             p: 3,
                             border: `1px dashed ${theme.palette.divider}`,
                             borderRadius: 2,
+                            bgcolor: `${theme.palette.background.default}50`,
                           }}
                         >
                           <Typography variant="body2" color="text.secondary">
