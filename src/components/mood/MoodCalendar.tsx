@@ -22,6 +22,7 @@ interface Rating {
   username: string;
   rating: number;
   date: string;
+  notes?: string;
 }
 
 interface MoodCalendarProps {
@@ -88,7 +89,7 @@ export const MoodCalendar = ({
   };
 
   // Get color based on rating value
-  const getRatingColor = (rating: number) => {
+  const getBarColor = (rating: number) => {
     if (rating <= 3) return theme.palette.error.main;
     if (rating <= 6) return theme.palette.warning.main;
     return theme.palette.success.main;
@@ -96,19 +97,48 @@ export const MoodCalendar = ({
 
   // Get chart data for the selected date
   const getChartData = () => {
+    // Use the actual ratings data for the selected date
+    const data = selectedDateRatings;
+
+    // Calculate the maximum label length to determine bottom margin
+    const maxLabelLength = Math.max(...data.map(r => r.username.length));
+    const bottomMargin = Math.max(80, 40 + maxLabelLength * 4); // Base margin + extra space for long labels
+
+    // Create color map based on rating values
+    const barColors = data.map(r => {
+      if (r.rating <= 3) return theme.palette.error.main;
+      if (r.rating <= 6) return theme.palette.warning.main;
+      return theme.palette.success.main;
+    });
+
     return {
       xAxis: [
         {
-          data: selectedDateRatings.map(r => r.username),
+          data: data.map(r => r.username),
           scaleType: 'band' as const,
+          tickLabelStyle: {
+            angle: -45,
+            textAnchor: 'end' as const,
+            fontSize: 12,
+          },
+          colorMap: {
+            type: 'ordinal' as const,
+            values: data.map(r => r.username),
+            colors: barColors,
+          },
         },
       ],
       series: [
         {
-          data: selectedDateRatings.map(r => r.rating),
-          color: theme.palette.primary.main,
+          data: data.map(r => r.rating),
+          label: 'Rating',
+          valueFormatter: (value: number | null, context: { dataIndex: number }) => {
+            if (value === null) return '';
+            return `${data[context.dataIndex].username}: ${value}`;
+          },
         },
       ],
+      bottomMargin,
     };
   };
 
@@ -118,7 +148,7 @@ export const MoodCalendar = ({
     const dateStr = day.format('YYYY-MM-DD');
     const hasRatings = hasRatingsForDate(dateStr);
     const avgRating = getAverageRatingForDate(dateStr);
-    const ratingColor = getRatingColor(avgRating);
+    const ratingColor = getBarColor(avgRating);
 
     return (
       <Tooltip
@@ -294,6 +324,7 @@ export const MoodCalendar = ({
             display: 'flex',
             flexDirection: { xs: 'column', md: 'row' },
             gap: 3,
+            height: { md: 600 },
           }}
         >
           <Box
@@ -302,8 +333,11 @@ export const MoodCalendar = ({
               display: 'flex',
               flexDirection: 'column',
               border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 1,
+              borderRadius: 2,
               position: 'relative',
+              height: '100%',
+              bgcolor: 'background.paper',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
             }}
           >
             {isLoading ? (
@@ -314,8 +348,8 @@ export const MoodCalendar = ({
                   sx={{
                     display: 'flex',
                     justifyContent: 'center',
-                    alignItems: 'center',
-                    flex: 1,
+                    alignItems: 'flex-start',
+                    height: '100%',
                     p: 2,
                   }}
                 >
@@ -327,17 +361,36 @@ export const MoodCalendar = ({
                     }}
                     sx={{
                       width: '100%',
-                      height: '100%',
-                      flex: 1,
+                      '& .MuiPickersCalendarHeader-root': {
+                        marginTop: 0,
+                        padding: '8px 0',
+                      },
                       '& .MuiPickersDay-root': {
                         width: 36,
                         height: 36,
                         margin: '0 2px',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        '&:hover': {
+                          backgroundColor: `${theme.palette.primary.main}15`,
+                        },
                       },
                       '& .MuiPickersDay-root.Mui-selected': {
                         backgroundColor: theme.palette.primary.main,
+                        color: 'white',
+                        fontWeight: 600,
                         '&:hover': {
                           backgroundColor: theme.palette.primary.dark,
+                        },
+                      },
+                      '& .MuiPickersCalendarHeader-label': {
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                      },
+                      '& .MuiPickersArrowSwitcher-button': {
+                        color: theme.palette.text.secondary,
+                        '&:hover': {
+                          backgroundColor: `${theme.palette.primary.main}15`,
                         },
                       },
                     }}
@@ -352,34 +405,54 @@ export const MoodCalendar = ({
               display: 'flex',
               flexDirection: 'column',
               border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 1,
+              borderRadius: 2,
               p: 2,
               position: 'relative',
+              height: '100%',
+              overflow: 'hidden',
+              bgcolor: 'background.paper',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
             }}
           >
             {isLoading ? (
               renderChartSkeleton()
             ) : (
-              <>
-                <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                  Ratings for {selectedDate.format('MMMM D, YYYY')}
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    color: theme.palette.text.primary,
+                    fontWeight: 600,
+                  }}
+                >
+                  {selectedDate.format('MMMM D, YYYY')}
+                  <Chip
+                    label={`${selectedDateRatings.length} ratings`}
+                    size="small"
+                    color="primary"
+                    sx={{ ml: 1 }}
+                  />
                 </Typography>
-                <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
+                <Box sx={{ flex: '0 0 300px', width: '100%' }}>
                   {selectedDateRatings.length > 0 ? (
                     <BarChart
                       height={300}
                       series={chartData.series}
                       xAxis={chartData.xAxis}
-                      margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
-                      colors={[
-                        theme.palette.error.main,
-                        theme.palette.warning.main,
-                        theme.palette.success.main,
-                        theme.palette.info.main,
-                        theme.palette.secondary.main,
-                      ]}
-                      borderRadius={4}
-                      tooltip={{ trigger: 'item' }}
+                      margin={{ top: 10, bottom: chartData.bottomMargin, left: 40, right: 10 }}
+                      borderRadius={8}
+                      slotProps={{
+                        legend: {
+                          hidden: true,
+                        },
+                      }}
+                      tooltip={{
+                        trigger: 'item',
+                      }}
                       axisHighlight={{
                         x: 'band',
                         y: 'line',
@@ -404,7 +477,140 @@ export const MoodCalendar = ({
                     </Box>
                   )}
                 </Box>
-              </>
+
+                {/* Comments Section */}
+                {selectedDateRatings.length > 0 && (
+                  <Box
+                    sx={{ mt: 2, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        mb: 2,
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          fontWeight: 600,
+                          color: theme.palette.text.primary,
+                        }}
+                      >
+                        Comments
+                      </Typography>
+                      <Chip
+                        label={`${selectedDateRatings.filter(r => r.notes).length} comments`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        flex: 1,
+                        overflowY: 'auto',
+                        p: 1,
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          background: 'transparent',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          background: theme.palette.divider,
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb:hover': {
+                          background: theme.palette.action.hover,
+                        },
+                      }}
+                    >
+                      {selectedDateRatings
+                        .filter(rating => rating.notes)
+                        .map(rating => (
+                          <Paper
+                            key={rating.userId}
+                            elevation={0}
+                            sx={{
+                              p: 2,
+                              border: `1px solid ${theme.palette.divider}`,
+                              borderRadius: 2,
+                              bgcolor: 'background.paper',
+                              transition: 'all 0.2s ease-in-out',
+                              '&:hover': {
+                                borderColor: theme.palette.primary.main,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                              },
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                mb: 1,
+                                gap: 1,
+                              }}
+                            >
+                              <Typography
+                                variant="subtitle2"
+                                sx={{
+                                  fontWeight: 600,
+                                  color: theme.palette.text.primary,
+                                }}
+                              >
+                                {rating.username}
+                              </Typography>
+                              <Chip
+                                label={`Rating: ${rating.rating}`}
+                                size="small"
+                                sx={{
+                                  bgcolor: getBarColor(rating.rating),
+                                  color: 'white',
+                                  fontWeight: 500,
+                                  '& .MuiChip-label': {
+                                    px: 1,
+                                  },
+                                }}
+                              />
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                lineHeight: 1.6,
+                                whiteSpace: 'pre-wrap',
+                              }}
+                            >
+                              {rating.notes}
+                            </Typography>
+                          </Paper>
+                        ))}
+                      {selectedDateRatings.filter(rating => rating.notes).length === 0 && (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            p: 3,
+                            border: `1px dashed ${theme.palette.divider}`,
+                            borderRadius: 2,
+                            bgcolor: `${theme.palette.background.default}50`,
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            No comments for this date
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             )}
           </Box>
         </Box>

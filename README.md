@@ -106,7 +106,6 @@ The application requires several environment variables to be set. See `.env.exam
 4. Configure Firebase Hosting
 5. Copy your Firebase configuration to your environment files
 
-
 ## 📝 Contributing
 
 1. Fork the repository
