@@ -287,22 +287,22 @@ class FirestoreRatingService implements RatingService {
           const ratingUser = members.find(m => m.userId === userId);
 
           if (ratingUser) {
-            // Send notifications to all other members
-            const notificationPromises = members
+            // Prepare recipients list (excluding the rating user)
+            const recipients = members
               .filter(member => member.userId !== userId && member.email)
-              .map(member =>
-                emailService.sendRatingNotification({
-                  to_email: member.email!,
-                  to_name: member.displayName,
-                  from_name: ratingUser.displayName,
-                  group_name: group.groupName,
-                  rating: ratingNumber,
-                  note: notes,
-                })
-              );
+              .map(member => ({
+                to_email: member.email!,
+                to_name: member.displayName,
+              }));
 
-            // Send notifications in parallel
-            await Promise.allSettled(notificationPromises);
+            // Send notification to all recipients in one request
+            await emailService.sendRatingNotification({
+              from_name: ratingUser.displayName,
+              group_name: group.groupName,
+              rating: ratingNumber,
+              note: notes,
+              recipients,
+            });
           }
         }
       } catch (error) {

@@ -1,5 +1,5 @@
 export const SPECIAL_USERS = {
-  RIZEL: 'rzlthms11@gmail.com',
+  RIZEL: import.meta.env.VITE_RIZELS_EMAIL,
   ILARION: 'larikpetriv@gmail.com',
 } as const;
 
@@ -18,7 +18,7 @@ export const isRizel = (email: string | null | undefined): boolean => {
 // Development utilities
 export const simulateSpecialUser = (email: string): string => {
   if (process.env.NODE_ENV === 'development' && import.meta.env.VITE_SIMULATE_RIZEL === 'true') {
-    return SPECIAL_USERS.RIZEL;
+    return SPECIAL_USERS.ILARION;
   }
   return email;
 };

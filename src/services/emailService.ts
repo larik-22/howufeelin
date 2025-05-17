@@ -1,62 +1,73 @@
-import emailjs from '@emailjs/browser';
-
-interface EmailParams {
+interface EmailRecipient {
   to_email: string;
   to_name: string;
+}
+
+interface EmailNotificationData {
   from_name: string;
   group_name: string;
   rating: number;
   note?: string;
+  recipients: EmailRecipient[];
 }
 
 class EmailService {
-  private readonly SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-  private readonly TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-  private readonly PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  private readonly WEBHOOK_URL = import.meta.env.VITE_EMAIL_WEBHOOK_URL;
 
   constructor() {
-    if (!this.SERVICE_ID || !this.TEMPLATE_ID || !this.PUBLIC_KEY) {
-      console.warn(
-        'EmailJS environment variables are not set. Email notifications will be disabled.'
-      );
+    if (!this.WEBHOOK_URL) {
+      console.warn('Email webhook URL is not set. Email notifications will be disabled.');
     }
   }
 
-  async sendRatingNotification(params: EmailParams): Promise<void> {
-    if (!this.SERVICE_ID || !this.TEMPLATE_ID || !this.PUBLIC_KEY) {
-      console.warn('EmailJS not configured, skipping email notification');
+  async sendRatingNotification(data: EmailNotificationData): Promise<void> {
+    if (!this.WEBHOOK_URL) {
+      console.warn('Email webhook not configured, skipping email notification');
       return;
     }
 
     try {
-      const templateParams = {
-        to_name: params.to_name,
-        from_name: params.from_name,
-        group_name: params.group_name,
-        rating: params.rating.toString(),
-        message: this.getRatingMessage(params.rating),
-        note: params.note || '',
-        to_email: params.to_email,
+      const payload = {
+        data: {
+          from_name: data.from_name,
+          group_name: data.group_name,
+          rating: data.rating,
+          message: this.getRatingMessage(data.rating),
+          note: data.note || '',
+          recipients: data.recipients,
+        },
+        timestamp: new Date().toISOString(),
+        event: 'rating_notification',
       };
 
-      console.log('Sending email with params:', {
-        serviceId: this.SERVICE_ID,
-        templateId: this.TEMPLATE_ID,
-        templateParams,
+      console.log('Webhook URL:', this.WEBHOOK_URL);
+      console.log('Sending webhook notification with payload:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch(this.WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
-      const response = await emailjs.send(
-        this.SERVICE_ID,
-        this.TEMPLATE_ID,
-        templateParams,
-        this.PUBLIC_KEY
-      );
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
-      console.log('Email sent successfully:', response);
+      const responseText = await response.text();
+      console.log('Response body:', responseText);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}, body: ${responseText}`);
+      }
+
+      console.log('Webhook notification sent successfully');
     } catch (error) {
-      console.error('Failed to send email notification:', error);
+      console.error('Failed to send webhook notification:', error);
       if (error instanceof Error) {
         console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
       }
       // Don't throw the error to prevent disrupting the rating flow
     }
