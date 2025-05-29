@@ -1,4 +1,6 @@
-# HowUFeelin
+![HowUFeelin](./public/howdy.png)
+
+# HowUFeeling ![HowUFeelin](./public/howufeel.svg)
 
 A web application that helps me and my friends track and share emotional wellbeing.
 
