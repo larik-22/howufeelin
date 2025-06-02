@@ -25,6 +25,7 @@ import { useLoadingState } from '@/hooks/useLoadingState';
 import { copyToClipboard } from '@/utils/clipboard';
 import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
 import { useLeaveGroup } from '@/hooks/useLeaveGroup';
+import { SpotifyTrack } from '@/services/spotify/search';
 
 import { GroupHeader } from '@/components/group/GroupHeader';
 import { GroupDetails } from '@/components/group/GroupDetails';
@@ -305,20 +306,40 @@ export default function GroupDetail() {
     setActiveTab(newValue);
   };
 
-  const handleMoodSubmit = async (rating: number, note: string) => {
+  const handleMoodSubmit = async (
+    rating: number,
+    note: string,
+    selectedSong?: SpotifyTrack | null
+  ) => {
     if (!groupId || !auth?.myUser?.userId) return;
 
     try {
       setIsRatingLoading(true);
 
-      // Create the rating
-      await ratingService.createRating(groupId, auth.myUser.userId, rating, note);
+      // Create the rating with optional song data
+      const songData = selectedSong
+        ? {
+            spotifyId: selectedSong.id,
+            name: selectedSong.name,
+            artists: selectedSong.artists,
+            album: selectedSong.album,
+            albumImageUrl: selectedSong.albumImageUrl,
+            uri: selectedSong.uri,
+            previewUrl: selectedSong.previewUrl,
+          }
+        : undefined;
+
+      await ratingService.createRating(groupId, auth.myUser.userId, rating, note, songData);
 
       // No need to manually update the state - the subscription will handle it
       setHasRatedToday(true);
 
+      const successMessage = selectedSong
+        ? `Mood rating submitted with "${selectedSong.name}" as your song of the day!`
+        : 'Mood rating submitted successfully!';
+
       setNotification({
-        message: 'Mood rating submitted successfully!',
+        message: successMessage,
         type: 'success',
       });
     } catch (error: unknown) {

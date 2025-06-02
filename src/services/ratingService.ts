@@ -21,7 +21,14 @@ import {
   getDocFromServer,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { Rating, RATING_MIN, RATING_MAX, isValidRating, createRatingId } from '@/types/Rating';
+import {
+  Rating,
+  SongOfTheDay,
+  RATING_MIN,
+  RATING_MAX,
+  isValidRating,
+  createRatingId,
+} from '@/types/Rating';
 import { analyticsService } from '@/services/analyticsService';
 import { emailService } from './emailService';
 import { groupService } from './groupService';
@@ -39,7 +46,8 @@ export interface RatingService {
     groupId: string,
     userId: string,
     ratingNumber: number,
-    notes?: string
+    notes?: string,
+    songData?: SongOfTheDay
   ): Promise<Rating>;
 
   // Get a user's rating for a specific date
@@ -228,7 +236,8 @@ class FirestoreRatingService implements RatingService {
     groupId: string,
     userId: string,
     ratingNumber: number,
-    notes?: string
+    notes?: string,
+    songData?: SongOfTheDay
   ): Promise<Rating> {
     try {
       // Check if user is banned
@@ -265,6 +274,7 @@ class FirestoreRatingService implements RatingService {
         ratingDate: today,
         ratingNumber,
         notes,
+        ...(songData && { songOfTheDay: songData }),
         createdAt: now,
         updatedAt: now,
       };
