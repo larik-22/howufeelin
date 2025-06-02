@@ -32,6 +32,9 @@ const RizelPage = lazy(() =>
 const Analytics = lazy(() =>
   import('@/pages/Analytics').then(module => ({ default: module.default }))
 );
+const SpotifyCallback = lazy(() =>
+  import('@/pages/SpotifyCallback').then(module => ({ default: module.SpotifyCallback }))
+);
 
 export function hydrateFallback() {
   return <Loading isFullscreen />;
@@ -142,6 +145,14 @@ export const router = createBrowserRouter([
               <Authenticate isRegister={true} />
             </Suspense>
           </AuthRoute>
+        ),
+      },
+      {
+        path: '/spotify/callback',
+        element: (
+          <Suspense fallback={<Loading isFullscreen />}>
+            <SpotifyCallback />
+          </Suspense>
         ),
       },
       {

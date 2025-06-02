@@ -14,6 +14,7 @@ import {
   useTheme,
   useMediaQuery,
   Paper,
+  Divider,
 } from '@mui/material';
 import SentimentVeryDissatisfiedIcon from '@mui/icons-material/SentimentVeryDissatisfied';
 import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied';
@@ -21,6 +22,7 @@ import SentimentSatisfiedIcon from '@mui/icons-material/SentimentSatisfied';
 import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt';
 import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
 import { useLoadingState } from '@/hooks/useLoadingState';
+import { SpotifyAuthButton } from '@/components/spotify/SpotifyAuthButton';
 
 interface MoodInputProps {
   hasRatedToday: boolean;
@@ -309,6 +311,17 @@ export const MoodInput = ({ hasRatedToday, onSubmit, isLoading = false }: MoodIn
                   placeholder="How was your day? What made you feel this way?"
                   disabled={displaySubmitting}
                 />
+
+                {/* Spotify Integration Test */}
+                <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
+                  <Divider sx={{ mb: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Song of the Day (Optional)
+                    </Typography>
+                  </Divider>
+                  <SpotifyAuthButton />
+                </Box>
+
                 <Button
                   variant="contained"
                   onClick={handleSubmit}

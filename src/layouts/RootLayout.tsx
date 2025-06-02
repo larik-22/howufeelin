@@ -3,6 +3,7 @@ import { CssBaseline } from '@mui/material';
 import { Outlet } from 'react-router';
 import { useContext } from 'react';
 import AuthProvider from '@/contexts/auth/authProvider';
+import { SpotifyProvider } from '@/contexts/spotify/SpotifyContext';
 import { createAppTheme } from '@/theme';
 import BaseLayout from './BaseLayout';
 import AuthContext from '@/contexts/auth/authContext';
@@ -24,7 +25,9 @@ function ThemedApp() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <ThemedApp />
+      <SpotifyProvider>
+        <ThemedApp />
+      </SpotifyProvider>
     </AuthProvider>
   );
 }
