@@ -22,11 +22,12 @@ import SentimentSatisfiedIcon from '@mui/icons-material/SentimentSatisfied';
 import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt';
 import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
 import { useLoadingState } from '@/hooks/useLoadingState';
-import { SpotifyAuthButton } from '@/components/spotify/SpotifyAuthButton';
+import { SongSelector } from '@/components/spotify/SongSelector';
+import { SpotifyTrack } from '@/services/spotify/search';
 
 interface MoodInputProps {
   hasRatedToday: boolean;
-  onSubmit: (rating: number, note: string) => Promise<void>;
+  onSubmit: (rating: number, note: string, selectedSong?: SpotifyTrack | null) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -35,6 +36,7 @@ export const MoodInput = ({ hasRatedToday, onSubmit, isLoading = false }: MoodIn
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [moodRating, setMoodRating] = useState<number>(7);
   const [moodNote, setMoodNote] = useState<string>('');
+  const [selectedSong, setSelectedSong] = useState<SpotifyTrack | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showMoodEmoji, setShowMoodEmoji] = useState<boolean>(false);
 
@@ -82,8 +84,9 @@ export const MoodInput = ({ hasRatedToday, onSubmit, isLoading = false }: MoodIn
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onSubmit(moodRating, moodNote);
+      await onSubmit(moodRating, moodNote, selectedSong);
       setMoodNote('');
+      setSelectedSong(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -312,14 +315,14 @@ export const MoodInput = ({ hasRatedToday, onSubmit, isLoading = false }: MoodIn
                   disabled={displaySubmitting}
                 />
 
-                {/* Spotify Integration Test */}
+                {/* Spotify Integration */}
                 <Box sx={{ mb: { xs: 1.5, sm: 2 } }}>
                   <Divider sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       Song of the Day (Optional)
                     </Typography>
                   </Divider>
-                  <SpotifyAuthButton />
+                  <SongSelector selectedTrack={selectedSong} onTrackSelect={setSelectedSong} />
                 </Box>
 
                 <Button

@@ -3,13 +3,13 @@ import { useSpotify } from '@/contexts/spotify/SpotifyContext';
 import { LibraryMusic, Logout } from '@mui/icons-material';
 
 export const SpotifyAuthButton = () => {
-  const { client, isConnecting, error, connectSpotify, logout } = useSpotify();
+  const { client, isConnecting, isAuthenticated, error, connectSpotify, logout } = useSpotify();
 
   if (isConnecting) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <CircularProgress size={20} />
-        <Typography variant="body2">Connecting to Spotify...</Typography>
+        <Typography variant="body2">Setting up Spotify...</Typography>
       </Box>
     );
   }
@@ -27,7 +27,7 @@ export const SpotifyAuthButton = () => {
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      {client ? (
+      {client && isAuthenticated ? (
         <>
           <Typography variant="body2" color="success.main">
             ✓ Connected to Spotify
@@ -39,7 +39,7 @@ export const SpotifyAuthButton = () => {
       ) : (
         <>
           <Typography variant="body2" color="text.secondary">
-            Not connected
+            {client ? 'Ready to connect' : 'Not connected'}
           </Typography>
           <Button
             variant="contained"

@@ -11,6 +11,7 @@ const SCOPES = [
   'user-library-read',
   'playlist-read-private',
   'user-top-read',
+  'user-read-recently-played',
 ];
 
 export class SpotifyAuthService {
@@ -43,12 +44,10 @@ export class SpotifyAuthService {
    */
   async authenticate(): Promise<void> {
     console.log('🔄 Starting Spotify authentication...');
-    const client = this.getClient();
 
-    // This will automatically redirect to Spotify if not authenticated
-    await client.currentUser.profile();
-
-    console.log('✅ Spotify authentication completed!');
+    // The SDK will handle the authentication flow automatically when API calls are made
+    // We don't need to immediately call an API here - let the components do that
+    console.log('✅ Spotify client ready for authentication!');
   }
 
   /**
