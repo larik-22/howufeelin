@@ -1,6 +1,16 @@
 import { useState } from 'react';
-import { Box, Collapse, Button, Typography, Avatar, useTheme, Paper, Chip } from '@mui/material';
-import { ExpandMore, ExpandLess, LibraryMusic, MusicNote, CheckCircle } from '@mui/icons-material';
+import {
+  Box,
+  Collapse,
+  Button,
+  Typography,
+  Avatar,
+  useTheme,
+  Paper,
+  Chip,
+  alpha,
+} from '@mui/material';
+import { ExpandMore, LibraryMusic, MusicNote, CheckCircle } from '@mui/icons-material';
 import { useSpotify } from '@/contexts/spotify/SpotifyContext';
 import { SpotifyAuthButton } from './SpotifyAuthButton';
 import { SpotifyBrowser } from './SpotifyBrowser';
@@ -32,18 +42,23 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
       <Paper
         elevation={0}
         sx={{
-          p: { xs: 3, sm: 4 },
+          p: 4,
           borderRadius: 2,
-          border: `2px dashed ${theme.palette.divider}`,
+          border: `1px dashed ${theme.palette.divider}`,
           bgcolor: 'background.default',
           textAlign: 'center',
+          transition: 'all 0.15s ease-out',
+          '&:hover': {
+            borderColor: 'primary.main',
+            bgcolor: alpha(theme.palette.primary.main, 0.02),
+          },
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
           <Box
             sx={{
-              width: 60,
-              height: 60,
+              width: 64,
+              height: 64,
               borderRadius: '50%',
               bgcolor: 'primary.main',
               display: 'flex',
@@ -52,11 +67,11 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
               color: 'white',
             }}
           >
-            <LibraryMusic fontSize="large" />
+            <LibraryMusic />
           </Box>
 
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: 'text.primary' }}>
               Add Your Song of the Day
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 300 }}>
@@ -77,14 +92,13 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
       {/* Selected Track Display */}
       {selectedTrack ? (
         <Paper
-          elevation={1}
+          elevation={0}
           sx={{
-            p: { xs: 2, sm: 3 },
+            p: 3,
             borderRadius: 2,
             border: `1px solid ${theme.palette.primary.main}`,
-            bgcolor: 'primary.50',
+            bgcolor: alpha(theme.palette.primary.main, 0.04),
             position: 'relative',
-            overflow: 'hidden',
           }}
         >
           {/* Success indicator */}
@@ -96,7 +110,7 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
               color: 'primary.main',
             }}
           >
-            <CheckCircle fontSize="small" />
+            <CheckCircle />
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pr: 4 }}>
@@ -104,14 +118,13 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
               src={selectedTrack.albumImageUrl || undefined}
               variant="rounded"
               sx={{
-                width: { xs: 56, sm: 64 },
-                height: { xs: 56, sm: 64 },
-                bgcolor: 'grey.200',
-                fontSize: '1.5rem',
-                boxShadow: 2,
+                width: 56,
+                height: 56,
+                bgcolor: 'grey.100',
+                borderRadius: 1.5,
               }}
             >
-              ♪
+              <MusicNote sx={{ color: 'text.secondary' }} />
             </Avatar>
 
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -119,18 +132,18 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
                 label="Song of the Day"
                 size="small"
                 color="primary"
-                sx={{ mb: 1, fontSize: '0.7rem' }}
+                variant="filled"
+                sx={{ mb: 1.5, fontSize: '0.7rem', borderRadius: 1 }}
               />
 
               <Typography
-                variant="h6"
+                variant="subtitle1"
                 sx={{
-                  fontWeight: 700,
+                  fontWeight: 600,
                   mb: 0.5,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
                   color: 'text.primary',
                 }}
               >
@@ -138,14 +151,13 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
               </Typography>
 
               <Typography
-                variant="body1"
+                variant="body2"
                 sx={{
                   mb: 0.5,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   color: 'text.secondary',
-                  fontSize: { xs: '0.875rem', sm: '1rem' },
                   fontWeight: 500,
                 }}
               >
@@ -153,13 +165,13 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
               </Typography>
 
               <Typography
-                variant="body2"
+                variant="caption"
                 sx={{
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   color: 'text.secondary',
-                  fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                  opacity: 0.7,
                 }}
               >
                 from {selectedTrack.album}
@@ -167,15 +179,17 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
             </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, mt: 2.5 }}>
             <Button
               size="small"
               variant="outlined"
               onClick={() => setIsExpanded(!isExpanded)}
               sx={{
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
-                px: 3,
+                px: 2.5,
+                py: 0.75,
                 borderRadius: 1.5,
+                fontWeight: 500,
+                fontSize: '0.875rem',
               }}
             >
               Change Song
@@ -185,10 +199,14 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
               variant="text"
               onClick={handleClearSelection}
               sx={{
-                fontSize: { xs: '0.8rem', sm: '0.875rem' },
                 color: 'text.secondary',
-                minWidth: 'auto',
                 px: 2,
+                py: 0.75,
+                borderRadius: 1.5,
+                fontSize: '0.875rem',
+                '&:hover': {
+                  color: 'error.main',
+                },
               }}
             >
               Remove
@@ -202,20 +220,20 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
           variant="outlined"
           onClick={() => setIsExpanded(!isExpanded)}
           sx={{
-            py: { xs: 2, sm: 3 },
+            py: 2.5,
             justifyContent: 'space-between',
             textTransform: 'none',
-            fontSize: { xs: '1rem', sm: '1.1rem' },
-            fontWeight: 600,
+            fontWeight: 500,
             borderStyle: 'dashed',
-            borderWidth: 2,
+            borderWidth: 1,
             borderColor: 'divider',
             color: 'text.secondary',
             borderRadius: 2,
+            transition: 'all 0.15s ease-out',
             '&:hover': {
               borderColor: 'primary.main',
               color: 'primary.main',
-              bgcolor: 'action.hover',
+              bgcolor: alpha(theme.palette.primary.main, 0.02),
               borderStyle: 'solid',
             },
           }}
@@ -223,44 +241,47 @@ export const SongSelector = ({ selectedTrack, onTrackSelect }: SongSelectorProps
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <MusicNote />
             <Box sx={{ textAlign: 'left' }}>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.1rem' } }}
-              >
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>
                 Choose Your Song of the Day
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: 'text.secondary', fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
-              >
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
                 Browse your Spotify library
               </Typography>
             </Box>
           </Box>
-          {isExpanded ? <ExpandLess /> : <ExpandMore />}
+          <ExpandMore
+            sx={{
+              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease-out',
+            }}
+          />
         </Button>
       )}
 
       {/* Expandable Track Selection */}
-      <Collapse in={isExpanded} timeout={300}>
+      <Collapse in={isExpanded} timeout={200}>
         <Paper
-          elevation={2}
+          elevation={0}
           sx={{
             mt: 2,
             borderRadius: 2,
             border: `1px solid ${theme.palette.divider}`,
             overflow: 'hidden',
+            bgcolor: 'background.paper',
           }}
         >
           <Box
             sx={{
-              bgcolor: 'background.default',
+              bgcolor: alpha(theme.palette.primary.main, 0.02),
               px: 3,
               py: 2,
               borderBottom: `1px solid ${theme.palette.divider}`,
             }}
           >
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 600, mb: 0.5, color: 'text.primary' }}
+            >
               Select Your Song
             </Typography>
             <Typography variant="body2" color="text.secondary">

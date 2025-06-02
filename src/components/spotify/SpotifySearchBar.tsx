@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Box,
   TextField,
@@ -6,11 +6,10 @@ import {
   Autocomplete,
   Paper,
   Typography,
-  Chip,
   IconButton,
-  Divider,
   CircularProgress,
   useTheme,
+  alpha,
 } from '@mui/material';
 import { Search, Clear, History, TrendingUp, MusicNote } from '@mui/icons-material';
 import { SpotifySearchService, SearchResults } from '@/services/spotify/search';
@@ -25,7 +24,6 @@ interface SpotifySearchBarProps {
 interface SearchSuggestion {
   type: 'suggestion' | 'history' | 'trending';
   text: string;
-  icon: React.ReactNode;
 }
 
 const TRENDING_SEARCHES = [
@@ -34,7 +32,14 @@ const TRENDING_SEARCHES = [
   'The Weeknd',
   'Dua Lipa',
   'Harry Styles',
+  'Drake',
+  'Ariana Grande',
+  'Post Malone',
 ];
+
+const SEARCH_DEBOUNCE_MS = 400;
+const SUGGESTION_DEBOUNCE_MS = 200;
+const MAX_HISTORY_ITEMS = 5;
 
 export const SpotifySearchBar = ({
   onSearchResults,
@@ -43,16 +48,18 @@ export const SpotifySearchBar = ({
 }: SpotifySearchBarProps) => {
   const theme = useTheme();
   const { client } = useSpotify();
-  const [searchService, setSearchService] = useState<SpotifySearchService | null>(null);
 
-  // Search state
+  // Core state
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
 
-  // Refs
+  // Services
+  const [searchService, setSearchService] = useState<SpotifySearchService | null>(null);
+
+  // Refs for cleanup
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const suggestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -63,100 +70,93 @@ export const SpotifySearchBar = ({
     }
   }, [client]);
 
-  // Load search history from localStorage
+  // Load search history on mount
   useEffect(() => {
     const savedHistory = localStorage.getItem('spotify-search-history');
     if (savedHistory) {
       try {
         setSearchHistory(JSON.parse(savedHistory));
-      } catch (error) {
-        console.error('Failed to parse search history:', error);
+      } catch {
+        // Invalid JSON, ignore
       }
     }
   }, []);
 
-  // Save search history to localStorage
-  const saveSearchHistory = useCallback(
-    (newQuery: string) => {
-      if (!newQuery.trim()) return;
-
-      const updatedHistory = [newQuery, ...searchHistory.filter(item => item !== newQuery)].slice(
-        0,
-        5
-      ); // Keep only last 5 searches
-
-      setSearchHistory(updatedHistory);
-      localStorage.setItem('spotify-search-history', JSON.stringify(updatedHistory));
-    },
-    [searchHistory]
+  // Memoized trending suggestions
+  const trendingSuggestions = useMemo(
+    () =>
+      TRENDING_SEARCHES.slice(0, 6).map(text => ({
+        type: 'trending' as const,
+        text,
+      })),
+    []
   );
 
-  // Get search suggestions
-  const getSuggestions = useCallback(
+  // Generate default suggestions when not searching
+  const defaultSuggestions = useMemo(() => {
+    const historySuggestions = searchHistory.slice(0, 3).map(text => ({
+      type: 'history' as const,
+      text,
+    }));
+
+    const remainingSlots = 6 - historySuggestions.length;
+    const trending = trendingSuggestions.slice(0, remainingSlots);
+
+    return [...historySuggestions, ...trending];
+  }, [searchHistory, trendingSuggestions]);
+
+  // Save search to history
+  const saveToHistory = useCallback((searchQuery: string) => {
+    if (!searchQuery.trim()) return;
+
+    setSearchHistory(prev => {
+      const updatedHistory = [searchQuery, ...prev.filter(item => item !== searchQuery)].slice(
+        0,
+        MAX_HISTORY_ITEMS
+      );
+
+      localStorage.setItem('spotify-search-history', JSON.stringify(updatedHistory));
+      return updatedHistory;
+    });
+  }, []);
+
+  // Get search suggestions from API
+  const fetchSuggestions = useCallback(
     async (searchQuery: string) => {
       if (!searchService || !searchQuery.trim()) {
-        // Show default suggestions when no query
-        const defaultSuggestions: SearchSuggestion[] = [
-          ...searchHistory.slice(0, 3).map(item => ({
-            type: 'history' as const,
-            text: item,
-            icon: <History fontSize="small" />,
-          })),
-          ...TRENDING_SEARCHES.slice(0, 5 - searchHistory.length).map(item => ({
-            type: 'trending' as const,
-            text: item,
-            icon: <TrendingUp fontSize="small" />,
-          })),
-        ];
         setSuggestions(defaultSuggestions);
         return;
       }
 
       try {
         const apiSuggestions = await searchService.getSearchSuggestions(searchQuery);
-        const newSuggestions: SearchSuggestion[] = [
-          ...apiSuggestions.map(text => ({
-            type: 'suggestion' as const,
-            text,
-            icon: <MusicNote fontSize="small" />,
-          })),
-        ];
-
-        setSuggestions(newSuggestions);
-      } catch (error) {
-        console.error('Failed to get suggestions:', error);
+        const formattedSuggestions = apiSuggestions.slice(0, 6).map(text => ({
+          type: 'suggestion' as const,
+          text,
+        }));
+        setSuggestions(formattedSuggestions);
+      } catch {
+        setSuggestions(defaultSuggestions);
       }
     },
-    [searchService, searchHistory]
+    [searchService, defaultSuggestions]
   );
 
-  // Debounced suggestion fetching
-  useEffect(() => {
-    if (suggestionTimeoutRef.current) {
-      clearTimeout(suggestionTimeoutRef.current);
-    }
-
-    suggestionTimeoutRef.current = setTimeout(() => {
-      getSuggestions(query);
-    }, 300);
-
-    return () => {
-      if (suggestionTimeoutRef.current) {
-        clearTimeout(suggestionTimeoutRef.current);
-      }
-    };
-  }, [query, getSuggestions]);
-
-  // Perform search
+  // Perform search - SINGLE SOURCE OF TRUTH
   const performSearch = useCallback(
     async (searchQuery: string) => {
-      if (!searchService || !searchQuery.trim()) {
-        onSearchResults({
-          tracks: [],
-          total: 0,
-          hasMore: false,
-          offset: 0,
-        });
+      if (!searchService) return;
+
+      // Clear previous timeout to prevent overlapping
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+
+      if (!searchQuery.trim()) {
+        setIsSearching(false);
+        onSearchResults({ tracks: [], total: 0, hasMore: false, offset: 0 });
+        onSearchStateChange(false, '');
         return;
       }
 
@@ -164,44 +164,56 @@ export const SpotifySearchBar = ({
       onSearchStateChange(true, searchQuery);
 
       try {
-        const results = await searchService.searchTracks(searchQuery, 0, 20);
+        const results = await searchService.searchTracks(searchQuery, 0, 10);
         onSearchResults(results);
-        saveSearchHistory(searchQuery);
-      } catch (error) {
-        console.error('Search failed:', error);
-        onSearchResults({
-          tracks: [],
-          total: 0,
-          hasMore: false,
-          offset: 0,
-        });
+        saveToHistory(searchQuery);
+      } catch {
+        onSearchResults({ tracks: [], total: 0, hasMore: false, offset: 0 });
       } finally {
         setIsSearching(false);
         onSearchStateChange(false, searchQuery);
       }
     },
-    [searchService, onSearchResults, onSearchStateChange, saveSearchHistory]
+    [searchService, onSearchResults, onSearchStateChange, saveToHistory]
   );
 
-  // Debounced search
+  // Handle input change - ONLY for UI and suggestions
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setQuery(value);
+
+      // Clear suggestion timeout
+      if (suggestionTimeoutRef.current) {
+        clearTimeout(suggestionTimeoutRef.current);
+      }
+
+      // Handle suggestions only
+      if (value.trim()) {
+        suggestionTimeoutRef.current = setTimeout(() => {
+          fetchSuggestions(value);
+        }, SUGGESTION_DEBOUNCE_MS);
+      } else {
+        setSuggestions(defaultSuggestions);
+      }
+    },
+    [fetchSuggestions, defaultSuggestions]
+  );
+
+  // Single search effect - ONLY trigger for search
   useEffect(() => {
+    // Clear any existing search timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
+    // Only search if there's a query
     if (query.trim()) {
       searchTimeoutRef.current = setTimeout(() => {
         performSearch(query);
-      }, 500);
+      }, SEARCH_DEBOUNCE_MS);
     } else {
-      // Clear results when query is empty
-      onSearchResults({
-        tracks: [],
-        total: 0,
-        hasMore: false,
-        offset: 0,
-      });
-      onSearchStateChange(false, '');
+      // Immediately clear when empty
+      performSearch('');
     }
 
     return () => {
@@ -209,79 +221,146 @@ export const SpotifySearchBar = ({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [query, performSearch, onSearchResults, onSearchStateChange]);
+  }, [query, performSearch]);
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(event.target.value);
-  };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      if (suggestionTimeoutRef.current) clearTimeout(suggestionTimeoutRef.current);
+    };
+  }, []);
 
-  const handleSuggestionSelect = (suggestion: SearchSuggestion) => {
-    setQuery(suggestion.text);
-    setIsOpen(false);
-    performSearch(suggestion.text);
-  };
+  // Handle suggestion selection
+  const handleSuggestionSelect = useCallback(
+    (suggestion: SearchSuggestion) => {
+      setQuery(suggestion.text);
+      performSearch(suggestion.text);
+    },
+    [performSearch]
+  );
 
-  const handleClear = () => {
+  // Handle clear
+  const handleClear = useCallback(() => {
+    // Clear all timeouts
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    if (suggestionTimeoutRef.current) {
+      clearTimeout(suggestionTimeoutRef.current);
+      suggestionTimeoutRef.current = null;
+    }
+
+    // Reset all states
     setQuery('');
-    setIsOpen(false);
-    onSearchResults({
-      tracks: [],
-      total: 0,
-      hasMore: false,
-      offset: 0,
-    });
+    setIsSearching(false);
+    setSuggestions(defaultSuggestions);
+    onSearchResults({ tracks: [], total: 0, hasMore: false, offset: 0 });
     onSearchStateChange(false, '');
-  };
+  }, [onSearchResults, onSearchStateChange, defaultSuggestions]);
 
-  const clearSearchHistory = () => {
-    setSearchHistory([]);
-    localStorage.removeItem('spotify-search-history');
-    getSuggestions(query); // Refresh suggestions
-  };
+  // Render suggestion option
+  const renderSuggestion = useCallback(
+    (suggestion: SearchSuggestion, index: number) => (
+      <Box
+        key={`${suggestion.type}-${suggestion.text}-${index}`}
+        onClick={() => handleSuggestionSelect(suggestion)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          py: 1.25,
+          px: 2,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease-out',
+          borderRadius: 1,
+          mx: 0.5,
+          '&:hover': {
+            bgcolor: alpha(theme.palette.action.hover, 0.08),
+          },
+        }}
+      >
+        <Box sx={{ color: 'text.secondary', flexShrink: 0 }}>
+          {suggestion.type === 'history' && <History fontSize="small" />}
+          {suggestion.type === 'trending' && <TrendingUp fontSize="small" />}
+          {suggestion.type === 'suggestion' && <MusicNote fontSize="small" />}
+        </Box>
+
+        <Typography
+          variant="body2"
+          sx={{
+            flex: 1,
+            fontWeight: suggestion.type === 'suggestion' ? 500 : 400,
+            color: 'text.primary',
+          }}
+        >
+          {suggestion.text}
+        </Typography>
+
+        {suggestion.type === 'trending' && (
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'warning.main',
+              fontSize: '0.7rem',
+              fontWeight: 500,
+            }}
+          >
+            Trending
+          </Typography>
+        )}
+      </Box>
+    ),
+    [handleSuggestionSelect, theme.palette.action.hover]
+  );
 
   return (
     <Box sx={{ position: 'relative', width: '100%' }}>
       <Autocomplete
         freeSolo
-        open={isOpen}
-        onOpen={() => setIsOpen(true)}
-        onClose={() => setIsOpen(false)}
+        open={isFocused && suggestions.length > 0}
         inputValue={query}
-        onInputChange={(_, value) => setQuery(value)}
+        onInputChange={(_, value) => handleInputChange(value)}
         options={suggestions}
         getOptionLabel={option => (typeof option === 'string' ? option : option.text)}
-        filterOptions={options => options} // Don't filter, we handle it ourselves
+        filterOptions={options => options} // No filtering, we handle it
         renderInput={params => (
           <TextField
             {...params}
             fullWidth
             placeholder={placeholder}
             variant="outlined"
-            value={query}
-            onChange={handleInputChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setTimeout(() => setIsFocused(false), 150)} // Delay to allow click
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
                 bgcolor: 'background.paper',
+                transition: 'all 0.15s ease-out',
+                border: `1px solid ${theme.palette.divider}`,
                 '&:hover': {
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
-                  },
+                  borderColor: 'primary.main',
+                },
+                '&.Mui-focused': {
+                  borderColor: 'primary.main',
+                  boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.2)}`,
                 },
               },
-              '& .MuiInputLabel-root': {
-                fontSize: { xs: '0.875rem', sm: '1rem' },
-              },
               '& .MuiInputBase-input': {
-                fontSize: { xs: '0.875rem', sm: '1rem' },
-                py: { xs: 1.5, sm: 2 },
+                py: 1.5,
+                fontSize: '0.9rem',
               },
             }}
             InputProps={{
               ...params.InputProps,
               startAdornment: (
                 <InputAdornment position="start">
-                  {isSearching ? <CircularProgress size={20} /> : <Search color="action" />}
+                  {isSearching ? (
+                    <CircularProgress size={18} sx={{ color: 'primary.main' }} />
+                  ) : (
+                    <Search sx={{ color: isFocused ? 'primary.main' : 'text.secondary' }} />
+                  )}
                 </InputAdornment>
               ),
               endAdornment: query && (
@@ -294,78 +373,25 @@ export const SpotifySearchBar = ({
             }}
           />
         )}
-        renderOption={(props, option) => (
-          <Box
-            component="li"
-            {...props}
-            onClick={() => handleSuggestionSelect(option)}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              py: 1.5,
-              px: 2,
-              '&:hover': {
-                bgcolor: 'action.hover',
-              },
-            }}
-          >
-            <Box sx={{ color: 'text.secondary' }}>{option.icon}</Box>
-            <Typography variant="body2" sx={{ flex: 1 }}>
-              {option.text}
-            </Typography>
-            {option.type === 'trending' && (
-              <Chip label="Trending" size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
-            )}
-            {option.type === 'history' && (
-              <Typography variant="caption" color="text.secondary">
-                Recent
-              </Typography>
-            )}
-          </Box>
-        )}
-        PaperComponent={({ children, ...paperProps }) => (
+        renderOption={() => null} // We handle custom rendering
+        PaperComponent={({ ...props }) => (
           <Paper
-            {...paperProps}
+            {...props}
             sx={{
-              mt: 1,
+              mt: 0.5,
               borderRadius: 2,
-              boxShadow: 3,
               border: `1px solid ${theme.palette.divider}`,
+              bgcolor: 'background.paper',
+              overflow: 'hidden',
+              boxShadow: theme.shadows[4],
             }}
           >
-            {children}
-            {searchHistory.length > 0 && (
-              <>
-                <Divider />
-                <Box
-                  sx={{
-                    p: 2,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    Search History
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: 'primary.main',
-                      cursor: 'pointer',
-                      '&:hover': { textDecoration: 'underline' },
-                    }}
-                    onClick={clearSearchHistory}
-                  >
-                    Clear
-                  </Typography>
-                </Box>
-              </>
-            )}
+            <Box sx={{ py: 1 }}>
+              {suggestions.map((suggestion, index) => renderSuggestion(suggestion, index))}
+            </Box>
           </Paper>
         )}
-        noOptionsText={query ? 'No suggestions found' : 'Start typing to search...'}
+        noOptionsText={null} // Hide default no options text
       />
     </Box>
   );
