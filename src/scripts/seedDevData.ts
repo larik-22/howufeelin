@@ -25,7 +25,7 @@ async function seedDevData() {
     });
 
     // Seed the data
-    await devDataService.seedTestData();
+    //await devDataService.seedTestData();
     console.log('Development data seeded successfully');
   } catch (error) {
     console.error('Failed to seed development data:', error);
