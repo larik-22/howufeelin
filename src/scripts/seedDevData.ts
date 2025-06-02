@@ -1,4 +1,4 @@
-import { devDataService } from '@/services/devDataService';
+//import { devDataService } from '@/services/devDataService';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 // Keep track of whether we've started the seeding process
