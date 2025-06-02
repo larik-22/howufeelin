@@ -39,6 +39,33 @@ export class SpotifySearchService {
   constructor(private client: SpotifyApi) {}
 
   /**
+   * Handle Spotify API errors and throw appropriate errors
+   */
+  private handleSpotifyError(error: unknown): never {
+    console.error('Spotify API Error:', error);
+
+    // Check if it's an authentication error
+    if (typeof error === 'object' && error !== null && 'status' in error) {
+      const errorWithStatus = error as { status: number };
+      const statusCode = errorWithStatus.status;
+
+      if (statusCode === 401 || statusCode === 403) {
+        throw new Error('SPOTIFY_AUTH_EXPIRED');
+      }
+
+      if (statusCode === 429) {
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+
+      if (statusCode >= 500) {
+        throw new Error('Spotify server error. Please try again later.');
+      }
+    }
+
+    throw new Error('Failed to connect to Spotify');
+  }
+
+  /**
    * Search for tracks with pagination
    */
   async searchTracks(
@@ -65,8 +92,7 @@ export class SpotifySearchService {
         offset,
       };
     } catch (error) {
-      console.error('Error searching Spotify tracks:', error);
-      throw new Error('Failed to search tracks');
+      this.handleSpotifyError(error);
     }
   }
 

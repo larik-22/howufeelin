@@ -8,27 +8,31 @@ import {
   Tooltip,
   Paper,
   Skeleton,
+  Avatar,
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
 import { PickersDay, PickersDayProps } from '@mui/x-date-pickers/PickersDay';
 import { BarChart } from '@mui/x-charts/BarChart';
+import { MusicNote } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useMemo, useEffect, useState } from 'react';
+import { SongOfTheDay } from '@/types/Rating';
 
-interface Rating {
+interface CalendarRating {
   userId: string;
   username: string;
   rating: number;
   date: string;
   notes?: string;
+  songOfTheDay?: SongOfTheDay;
 }
 
 interface MoodCalendarProps {
   selectedDate: dayjs.Dayjs;
   onDateChange: (date: dayjs.Dayjs | null) => void;
-  ratings: Rating[];
+  ratings: CalendarRating[];
   isLoading?: boolean;
   onDateSelected?: (date: string) => void;
 }
@@ -41,11 +45,11 @@ export const MoodCalendar = ({
   onDateSelected,
 }: MoodCalendarProps) => {
   const theme = useTheme();
-  const [selectedDateRatings, setSelectedDateRatings] = useState<Rating[]>([]);
+  const [selectedDateRatings, setSelectedDateRatings] = useState<CalendarRating[]>([]);
 
   // Memoize the ratings by date to avoid recalculating on every render
   const ratingsByDate = useMemo(() => {
-    const map = new Map<string, Rating[]>();
+    const map = new Map<string, CalendarRating[]>();
 
     ratings.forEach(rating => {
       if (!map.has(rating.date)) {
@@ -93,6 +97,99 @@ export const MoodCalendar = ({
     if (rating <= 3) return theme.palette.error.main;
     if (rating <= 6) return theme.palette.warning.main;
     return theme.palette.success.main;
+  };
+
+  // Render song of the day component
+  const renderSongOfTheDay = (rating: CalendarRating) => {
+    if (!rating.songOfTheDay) return null;
+
+    const song = rating.songOfTheDay;
+
+    const handleSongClick = () => {
+      if (song.spotifyId) {
+        // Open directly in Spotify web player
+        window.open(`https://open.spotify.com/track/${song.spotifyId}`, '_blank');
+      }
+    };
+
+    return (
+      <Box
+        onClick={handleSongClick}
+        sx={{
+          mt: 1,
+          p: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          borderRadius: 1,
+          bgcolor: 'background.default',
+          border: `1px solid ${theme.palette.divider}`,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease-out',
+          '&:hover': {
+            bgcolor: 'action.hover',
+            borderColor: '#1DB954',
+          },
+        }}
+      >
+        <Avatar
+          src={song.albumImageUrl}
+          variant="rounded"
+          sx={{
+            width: 24,
+            height: 24,
+            bgcolor: 'grey.200',
+            borderRadius: 0.5,
+          }}
+        >
+          <MusicNote sx={{ fontSize: '10px', color: 'text.secondary' }} />
+        </Avatar>
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight: 500,
+              color: 'text.primary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+              fontSize: '0.7rem',
+            }}
+          >
+            {song.name}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontSize: '0.65rem',
+              opacity: 0.8,
+            }}
+          >
+            {song.artists[0]}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <MusicNote sx={{ fontSize: '8px', color: 'theme.main' }} />
+        </Box>
+      </Box>
+    );
   };
 
   // Get chart data for the selected date
@@ -472,7 +569,7 @@ export const MoodCalendar = ({
                       }}
                     >
                       <Typography variant="body2" color="text.secondary">
-                        No ratings for this date
+                        No comments or songs for this date
                       </Typography>
                     </Box>
                   )}
@@ -498,10 +595,12 @@ export const MoodCalendar = ({
                           color: theme.palette.text.primary,
                         }}
                       >
-                        Comments
+                        Comments & Songs
                       </Typography>
                       <Chip
-                        label={`${selectedDateRatings.filter(r => r.notes).length} comments`}
+                        label={`${
+                          selectedDateRatings.filter(r => r.notes || r.songOfTheDay).length
+                        } items`}
                         size="small"
                         color="primary"
                         variant="outlined"
@@ -531,7 +630,7 @@ export const MoodCalendar = ({
                       }}
                     >
                       {selectedDateRatings
-                        .filter(rating => rating.notes)
+                        .filter(rating => rating.notes || rating.songOfTheDay)
                         .map(rating => (
                           <Paper
                             key={rating.userId}
@@ -578,19 +677,27 @@ export const MoodCalendar = ({
                                 }}
                               />
                             </Box>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                lineHeight: 1.6,
-                                whiteSpace: 'pre-wrap',
-                              }}
-                            >
-                              {rating.notes}
-                            </Typography>
+
+                            {rating.notes && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{
+                                  lineHeight: 1.6,
+                                  whiteSpace: 'pre-wrap',
+                                  mb: rating.songOfTheDay ? 1 : 0,
+                                }}
+                              >
+                                {rating.notes}
+                              </Typography>
+                            )}
+
+                            {/* Song of the Day */}
+                            {renderSongOfTheDay(rating)}
                           </Paper>
                         ))}
-                      {selectedDateRatings.filter(rating => rating.notes).length === 0 && (
+                      {selectedDateRatings.filter(rating => rating.notes || rating.songOfTheDay)
+                        .length === 0 && (
                         <Box
                           sx={{
                             display: 'flex',
@@ -603,7 +710,7 @@ export const MoodCalendar = ({
                           }}
                         >
                           <Typography variant="body2" color="text.secondary">
-                            No comments for this date
+                            No comments or songs for this date
                           </Typography>
                         </Box>
                       )}

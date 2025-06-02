@@ -9,7 +9,7 @@ interface SpotifyContextType {
   error: string | null;
   connectSpotify: () => Promise<void>;
   logout: () => void;
-  updateAuthenticationState: (isAuth: boolean) => void;
+  updateAuthenticationState: (isAuth: boolean, error?: string | null) => void;
 }
 
 const SpotifyContext = createContext<SpotifyContextType | undefined>(undefined);
@@ -32,88 +32,115 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if user is actually authenticated by making an API call
-  const verifyAuthentication = async (spotifyClient: SpotifyApi): Promise<boolean> => {
-    try {
-      await spotifyClient.currentUser.profile();
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // Check for existing authentication on mount
   useEffect(() => {
-    const checkExistingAuth = async () => {
+    console.log('🔄 SpotifyContext: Initializing and checking existing authentication...');
+    const spotifyClient = spotifyAuth.getClient();
+    setClient(spotifyClient);
+
+    const checkAuthStatus = async () => {
       try {
-        console.log('🔍 Checking for existing Spotify authentication...');
-
-        // Try to get existing client
-        const spotifyClient = spotifyAuth.getClient();
-        console.log('📱 Spotify client:', spotifyClient);
-
-        // Test if we can make an authenticated API call
-        const isAuth = await verifyAuthentication(spotifyClient);
-
-        if (isAuth) {
-          // If we get here, authentication is valid
-          setClient(spotifyClient);
-          setIsAuthenticated(true);
-          console.log('✅ Existing Spotify authentication found and restored!');
-        } else {
-          setClient(null);
-          setIsAuthenticated(false);
-          console.log('ℹ️ No existing Spotify authentication found');
-        }
-      } catch (error) {
-        console.log('ℹ️ No existing Spotify authentication found:', error);
-        // This is normal if user hasn't authenticated yet
-        setClient(null);
+        // This API call attempts to use existing tokens (incl. silent refresh by SDK).
+        // If successful, user is already authenticated.
+        await spotifyClient.currentUser.profile();
+        setIsAuthenticated(true);
+        setError(null); // Clear any previous errors like "user not authenticated"
+        console.log(
+          '✅ SpotifyContext: User is ALREADY AUTHENTICATED (valid token found/refreshed).'
+        );
+      } catch {
+        // This error means the SDK couldn't get a profile silently (no valid token or refresh failed).
+        // This is expected for new users or if tokens truly expired.
         setIsAuthenticated(false);
+        console.log(
+          'ℹ️ SpotifyContext: User NOT AUTHENTICATED or token expired (currentUser.profile failed silently).'
+        );
+        // Do not set a global error here as this is an initial state discovery.
       }
     };
 
-    checkExistingAuth();
+    checkAuthStatus();
   }, []);
 
   const connectSpotify = async () => {
+    if (!client) {
+      setError('Spotify client not initialized yet.');
+      console.error('Attempted to connect before Spotify client was initialized.');
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
     try {
-      setIsConnecting(true);
+      console.log(
+        '🔄 SpotifyContext: connectSpotify called. Attempting profile fetch (will redirect if needed)...'
+      );
+      // This API call will trigger the SDK's auth flow (redirect) if not already authenticated
+      // or if tokens from localStorage were invalid/expired and couldn't be silently refreshed by the initial check.
+      await client.currentUser.profile();
+      setIsAuthenticated(true); // Success!
       setError(null);
-
-      console.log('🔄 User clicked Connect Spotify...');
-
-      // Get client and prepare for authentication
-      const spotifyClient = spotifyAuth.getClient();
-      await spotifyAuth.authenticate();
-
-      // Set the client first
-      setClient(spotifyClient);
-
-      // The actual authentication (redirect) will happen when components make API calls
-      // For now, we'll mark as not authenticated until a successful API call
-      setIsAuthenticated(false);
-      console.log('✅ Spotify client ready for use!');
+      console.log('✅ SpotifyContext: connectSpotify - Authentication successful.');
     } catch (err) {
-      // If there's an error setting up the client
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to Spotify';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to Spotify.';
+      console.error(
+        '❌ SpotifyContext: connectSpotify - Error during authentication attempt:',
+        err
+      );
       setError(errorMessage);
-      console.error('❌ Spotify connection failed:', err);
+      setIsAuthenticated(false); // Ensure auth state is false if connection attempt fails
     } finally {
       setIsConnecting(false);
     }
   };
 
   const logout = () => {
-    spotifyAuth.logout();
-    setClient(null);
+    console.log('🔄 Logging out from Spotify...');
     setError(null);
     setIsAuthenticated(false);
-    console.log('🔓 Logged out from Spotify');
+
+    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+    if (clientId) {
+      const keysToClear = [
+        `spotify-sdk:${clientId}:token`,
+        `spotify-sdk:${clientId}:refresh_token`,
+        `spotify-sdk:${clientId}:expires_at`,
+        `spotify-sdk:${clientId}:code_verifier`,
+        `spotify-sdk:${clientId}:state`,
+      ];
+      console.log('🧹 Clearing known Spotify SDK localStorage keys:', keysToClear);
+      keysToClear.forEach(key => localStorage.removeItem(key));
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('spotify-sdk:') && key.includes(clientId)) {
+          console.log('🧹 Clearing additional SDK-like key:', key);
+          localStorage.removeItem(key);
+        }
+      }
+    } else {
+      console.warn('⚠️ Spotify Client ID not found, cannot clear specific SDK tokens.');
+    }
+
+    const newClient = spotifyAuth.getClient(true); // forceRecreate = true
+    setClient(newClient);
+
+    console.log('🔓 Logged out from Spotify and client has been reset.');
   };
 
-  const updateAuthenticationState = (isAuth: boolean) => {
-    setIsAuthenticated(isAuth);
+  const updateAuthenticationState = (isAuth: boolean, authError?: string | null) => {
+    if (isAuthenticated === isAuth) return; // Avoid redundant updates
+
+    if (isAuth) {
+      console.log('ℹ️ SpotifyContext: Authentication confirmed by component.');
+      setIsAuthenticated(true);
+      setError(null);
+    } else {
+      console.log('ℹ️ SpotifyContext: Authentication failed or lost, reported by component.');
+      setIsAuthenticated(false);
+      if (authError) {
+        setError(authError);
+      }
+    }
   };
 
   const value: SpotifyContextType = {

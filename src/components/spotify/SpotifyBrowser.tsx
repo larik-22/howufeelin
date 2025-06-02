@@ -92,9 +92,11 @@ export const SpotifyBrowser = ({ selectedTrack, onTrackSelect }: SpotifyBrowserP
       setError(errorMessage);
       console.error('Error loading playlists:', err);
 
+      // Check for authentication errors
       if (
         (err instanceof Error && err.message.includes('403')) ||
-        (err instanceof Error && err.message.includes('401'))
+        (err instanceof Error && err.message.includes('401')) ||
+        (err instanceof Error && err.message === 'SPOTIFY_AUTH_EXPIRED')
       ) {
         updateAuthenticationState(false);
       }
@@ -171,9 +173,11 @@ export const SpotifyBrowser = ({ selectedTrack, onTrackSelect }: SpotifyBrowserP
         setError(errorMessage);
         console.error('Error loading tracks:', err);
 
+        // Check for authentication errors
         if (
           (err instanceof Error && err.message.includes('403')) ||
-          (err instanceof Error && err.message.includes('401'))
+          (err instanceof Error && err.message.includes('401')) ||
+          (err instanceof Error && err.message === 'SPOTIFY_AUTH_EXPIRED')
         ) {
           updateAuthenticationState(false);
         }

@@ -26,6 +26,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
 import { useLeaveGroup } from '@/hooks/useLeaveGroup';
 import { SpotifyTrack } from '@/services/spotify/search';
+import { useSpotify } from '@/contexts/spotify/SpotifyContext';
 
 import { GroupHeader } from '@/components/group/GroupHeader';
 import { GroupDetails } from '@/components/group/GroupDetails';
@@ -54,6 +55,7 @@ export default function GroupDetail() {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const { getRoleColor, getRoleLabel, hasPermission } = useGroupPermissions();
+  const { logout: spotifyLogout } = useSpotify();
 
   // Get the group data from the loader
   const loaderData = useLoaderData() as LoaderData;
@@ -323,9 +325,9 @@ export default function GroupDetail() {
             name: selectedSong.name,
             artists: selectedSong.artists,
             album: selectedSong.album,
-            albumImageUrl: selectedSong.albumImageUrl,
+            albumImageUrl: selectedSong.albumImageUrl || undefined,
             uri: selectedSong.uri,
-            previewUrl: selectedSong.previewUrl,
+            previewUrl: selectedSong.previewUrl || undefined,
           }
         : undefined;
 
@@ -519,9 +521,12 @@ export default function GroupDetail() {
                 variant="outlined"
                 color="error"
                 onClick={handleAddTestRatingsDirectly}
-                sx={{ mb: 2 }}
+                sx={{ mb: 2, mr: 2 }}
               >
                 Add Test Ratings Directly
+              </Button>
+              <Button variant="outlined" color="warning" onClick={spotifyLogout} sx={{ mb: 2 }}>
+                Logout Spotify (Test)
               </Button>
             </>
           )}
@@ -586,6 +591,7 @@ export default function GroupDetail() {
                 rating: rating.ratingNumber,
                 date: rating.ratingDate,
                 notes: rating.notes,
+                songOfTheDay: rating.songOfTheDay,
               }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
