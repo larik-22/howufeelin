@@ -6,6 +6,7 @@ import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied
 import SentimentSatisfiedIcon from '@mui/icons-material/SentimentSatisfied';
 import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt';
 import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
+import { MusicNote } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 
 interface RatingListProps {
@@ -62,6 +63,99 @@ export const RatingList = ({
     return userInitial;
   };
 
+  // Render song of the day component
+  const renderSongOfTheDay = (rating: Rating) => {
+    if (!rating.songOfTheDay) return null;
+
+    const song = rating.songOfTheDay;
+
+    const handleSongClick = () => {
+      if (song.spotifyId) {
+        // Open directly in Spotify web player
+        window.open(`https://open.spotify.com/track/${song.spotifyId}`, '_blank');
+      }
+    };
+
+    return (
+      <Box
+        onClick={handleSongClick}
+        sx={{
+          ml: 7,
+          mt: 1,
+          p: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          borderRadius: 1,
+          bgcolor: 'background.default',
+          border: `1px solid ${theme.palette.divider}`,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease-out',
+          '&:hover': {
+            bgcolor: 'action.hover',
+            borderColor: 'theme.main',
+          },
+        }}
+      >
+        <Avatar
+          src={song.albumImageUrl}
+          variant="rounded"
+          sx={{
+            width: 32,
+            height: 32,
+            bgcolor: 'grey.200',
+            borderRadius: 0.5,
+          }}
+        ></Avatar>
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight: 500,
+              color: 'text.primary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+              fontSize: '0.75rem',
+            }}
+          >
+            {song.name}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontSize: '0.7rem',
+              opacity: 0.8,
+            }}
+          >
+            {song.artists[0]} • {song.album}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            bgcolor: 'theme.main',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <MusicNote sx={{ fontSize: '10px', color: 'theme.main' }} />
+        </Box>
+      </Box>
+    );
+  };
+
   if (isLoading) {
     return (
       <Card sx={{ mt: 3, boxShadow: 3, borderRadius: 2 }}>
@@ -82,6 +176,10 @@ export const RatingList = ({
                 </Box>
               </Box>
               <Skeleton variant="text" width="60%" sx={{ ml: 7, mb: 1 }} />
+              {/* Song skeleton */}
+              <Box sx={{ ml: 7, mt: 1.5, mb: 1 }}>
+                <Skeleton variant="rectangular" width="100%" height={72} sx={{ borderRadius: 2 }} />
+              </Box>
               {index < 2 && <Divider sx={{ my: 1.5 }} />}
             </Box>
           ))}
@@ -161,6 +259,7 @@ export const RatingList = ({
                   </Box>
                 </Box>
               </Box>
+
               {rating.notes && (
                 <Typography
                   variant="body2"
@@ -169,6 +268,10 @@ export const RatingList = ({
                   "{rating.notes}"
                 </Typography>
               )}
+
+              {/* Song of the Day */}
+              {renderSongOfTheDay(rating)}
+
               {index < ratings.length - 1 && <Divider sx={{ my: 1.5 }} />}
             </Box>
           ))}

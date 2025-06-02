@@ -28,40 +28,21 @@ export class SpotifyAuthService {
   }
 
   /**
-   * Create and return Spotify client - let the SDK handle everything
+   * Create and return Spotify client - the SDK handles all authentication automatically.
+   * Can optionally force re-creation of the client instance.
    */
-  getClient(): SpotifyApi {
-    if (!this.client) {
-      console.log('🔄 Creating Spotify client...');
+  getClient(forceRecreate: boolean = false): SpotifyApi {
+    if (!this.client || forceRecreate) {
+      if (this.client && forceRecreate) {
+        console.log('🔄 Re-creating Spotify client instance due to forceRecreate flag.');
+      } else if (!this.client) {
+        console.log('🔄 Creating new Spotify client instance...');
+      }
+      // The SDK automatically handles token persistence, refresh, and authentication flows
       this.client = SpotifyApi.withUserAuthorization(CLIENT_ID, REDIRECT_URI, SCOPES);
-      console.log('✅ Spotify client created successfully');
+      console.log('✅ Spotify client instance ready.');
     }
     return this.client;
-  }
-
-  /**
-   * Start authentication flow - this will redirect if needed
-   */
-  async authenticate(): Promise<void> {
-    console.log('🔄 Starting Spotify authentication...');
-
-    // The SDK will handle the authentication flow automatically when API calls are made
-    // We don't need to immediately call an API here - let the components do that
-    console.log('✅ Spotify client ready for authentication!');
-  }
-
-  /**
-   * Logs out from Spotify
-   */
-  logout(): void {
-    this.client = null;
-    // Clear any Spotify tokens from localStorage
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes('spotify')) {
-        localStorage.removeItem(key);
-      }
-    });
-    console.log('🔓 Spotify: Logged out');
   }
 }
 

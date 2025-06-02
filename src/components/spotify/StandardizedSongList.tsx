@@ -344,8 +344,9 @@ export const StandardizedSongList = ({
                         </Typography>
                       }
                       secondary={
-                        <Box>
+                        <>
                           <Typography
+                            component="span"
                             variant="caption"
                             sx={{
                               overflow: 'hidden',
@@ -359,6 +360,7 @@ export const StandardizedSongList = ({
                             {track.artists.join(', ')}
                           </Typography>
                           <Typography
+                            component="span"
                             variant="caption"
                             sx={{
                               overflow: 'hidden',
@@ -372,7 +374,7 @@ export const StandardizedSongList = ({
                           >
                             {track.album}
                           </Typography>
-                        </Box>
+                        </>
                       }
                     />
 
