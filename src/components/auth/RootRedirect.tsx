@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { Alert, Snackbar, Box } from '@mui/material';
 import AuthContext from '@/contexts/auth/authContext';
-import Loading from './Loading';
+import Loading from '@/components/ui/Loading';
 
 export default function RootRedirect() {
   const auth = useContext(AuthContext);

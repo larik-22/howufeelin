@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import AuthContext from '@/contexts/auth/authContext';
-import Loading from './Loading';
+import Loading from '@/components/ui/Loading';
 
 export default function ProtectedRoute() {
   const auth = useContext(AuthContext);

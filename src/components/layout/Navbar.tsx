@@ -25,7 +25,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AuthContext from '@/contexts/auth/authContext';
 import { isRizel } from '@/utils/specialUsers';
-import RizelEasterEgg from './RizelEasterEgg';
+import RizelEasterEgg from '@/components/special/RizelEasterEgg';
 
 export default function Navbar() {
   const theme = useTheme();
