@@ -325,9 +325,11 @@ export default function GroupDetail() {
             name: selectedSong.name,
             artists: selectedSong.artists,
             album: selectedSong.album,
-            albumImageUrl: selectedSong.albumImageUrl || undefined,
             uri: selectedSong.uri,
-            previewUrl: selectedSong.previewUrl || undefined,
+            // Conditionally add albumImageUrl if it exists
+            ...(selectedSong.albumImageUrl && { albumImageUrl: selectedSong.albumImageUrl }),
+            // Conditionally add previewUrl if it exists
+            ...(selectedSong.previewUrl && { previewUrl: selectedSong.previewUrl }),
           }
         : undefined;
 

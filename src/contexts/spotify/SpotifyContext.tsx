@@ -33,32 +33,85 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🔄 SpotifyContext: Initializing and checking existing authentication...');
+    console.log('🔄 SpotifyContext: Initializing Spotify client...');
     const spotifyClient = spotifyAuth.getClient();
     setClient(spotifyClient);
 
-    const checkAuthStatus = async () => {
+    const initializeAuth = async () => {
+      // Check if we're returning from Spotify auth (has code or access_token in URL)
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasAuthCallback = urlParams.has('code') || urlParams.has('access_token');
+
+      if (hasAuthCallback) {
+        console.log(
+          '🔄 SpotifyContext: Detected auth callback, attempting to complete authentication...'
+        );
+        setIsConnecting(true);
+
+        try {
+          // The SDK should automatically handle the callback
+          await spotifyClient.currentUser.profile();
+          setIsAuthenticated(true);
+          setError(null);
+          console.log('✅ SpotifyContext: Authentication completed successfully from callback.');
+
+          // Clean up URL parameters
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch (err) {
+          console.error('❌ SpotifyContext: Failed to complete authentication from callback:', err);
+          setIsAuthenticated(false);
+          setError('Failed to complete authentication');
+        } finally {
+          setIsConnecting(false);
+        }
+        return;
+      }
+
+      // If no callback, check for existing authentication silently
       try {
-        // This API call attempts to use existing tokens (incl. silent refresh by SDK).
-        // If successful, user is already authenticated.
-        await spotifyClient.currentUser.profile();
-        setIsAuthenticated(true);
-        setError(null); // Clear any previous errors like "user not authenticated"
-        console.log(
-          '✅ SpotifyContext: User is ALREADY AUTHENTICATED (valid token found/refreshed).'
-        );
-      } catch {
-        // This error means the SDK couldn't get a profile silently (no valid token or refresh failed).
-        // This is expected for new users or if tokens truly expired.
+        console.log('🔄 SpotifyContext: Checking for existing authentication...');
+
+        // Check for existing tokens in localStorage WITHOUT making API calls
+        const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+        if (clientId) {
+          const tokenKey = `spotify-sdk:${clientId}:token`;
+          const expiresAtKey = `spotify-sdk:${clientId}:expires_at`;
+
+          const storedToken = localStorage.getItem(tokenKey);
+          const expiresAt = localStorage.getItem(expiresAtKey);
+
+          if (storedToken && expiresAt) {
+            const expirationTime = parseInt(expiresAt, 10);
+            const currentTime = Date.now();
+
+            // Check if token is not expired (with 5 minute buffer)
+            if (expirationTime > currentTime + 5 * 60 * 1000) {
+              setIsAuthenticated(true);
+              setError(null);
+              console.log('✅ SpotifyContext: Found valid stored authentication tokens.');
+              return;
+            } else {
+              console.log('ℹ️ SpotifyContext: Stored tokens expired.');
+            }
+          } else {
+            console.log('ℹ️ SpotifyContext: No stored tokens found.');
+          }
+        }
+
+        // If we get here, no valid tokens were found
         setIsAuthenticated(false);
-        console.log(
-          'ℹ️ SpotifyContext: User NOT AUTHENTICATED or token expired (currentUser.profile failed silently).'
-        );
-        // Do not set a global error here as this is an initial state discovery.
+        setError(null);
+        console.log('ℹ️ SpotifyContext: No existing authentication found.');
+      } catch {
+        // This is expected for users who haven't authenticated yet
+        setIsAuthenticated(false);
+        setError(null);
+        console.log('ℹ️ SpotifyContext: No existing authentication found.');
       }
     };
 
-    checkAuthStatus();
+    initializeAuth();
   }, []);
 
   const connectSpotify = async () => {
@@ -68,26 +121,33 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
       return;
     }
 
+    // If already authenticated, no need to do anything
+    if (isAuthenticated) {
+      console.log('ℹ️ SpotifyContext: Already authenticated, no action needed.');
+      return;
+    }
+
     setIsConnecting(true);
     setError(null);
+
     try {
-      console.log(
-        '🔄 SpotifyContext: connectSpotify called. Attempting profile fetch (will redirect if needed)...'
-      );
-      // This API call will trigger the SDK's auth flow (redirect) if not already authenticated
-      // or if tokens from localStorage were invalid/expired and couldn't be silently refreshed by the initial check.
+      console.log('🔄 SpotifyContext: Starting authentication flow...');
+
+      // This will either:
+      // 1. Work silently if valid tokens exist (shouldn't happen since we checked above)
+      // 2. Trigger redirect to Spotify auth for user authorization
       await client.currentUser.profile();
-      setIsAuthenticated(true); // Success!
+
+      // If we reach here without redirect, authentication was successful
+      setIsAuthenticated(true);
       setError(null);
-      console.log('✅ SpotifyContext: connectSpotify - Authentication successful.');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect to Spotify.';
-      console.error(
-        '❌ SpotifyContext: connectSpotify - Error during authentication attempt:',
-        err
-      );
-      setError(errorMessage);
-      setIsAuthenticated(false); // Ensure auth state is false if connection attempt fails
+      console.log('✅ SpotifyContext: Authentication successful.');
+    } catch {
+      // If this fails, it might be because we're being redirected
+      // The actual auth completion will happen when user returns
+      console.log('🔄 SpotifyContext: Auth flow initiated, waiting for redirect callback...');
+      setError(null);
+      setIsAuthenticated(false);
     } finally {
       setIsConnecting(false);
     }
