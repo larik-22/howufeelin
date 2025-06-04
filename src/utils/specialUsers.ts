@@ -16,9 +16,6 @@ export const isRizel = (email: string | null | undefined): boolean => {
 };
 
 // Development utilities
-export const simulateSpecialUser = (email: string): string => {
-  if (process.env.NODE_ENV === 'development' && import.meta.env.VITE_SIMULATE_RIZEL === 'true') {
-    return SPECIAL_USERS.ILARION;
-  }
-  return email;
+export const simulateSpecialUser = (): string => {
+  return SPECIAL_USERS.ILARION;
 };

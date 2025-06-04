@@ -72,42 +72,97 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
       try {
         console.log('🔄 SpotifyContext: Checking for existing authentication...');
 
-        // Check for existing tokens in localStorage WITHOUT making API calls
+        // DEBUG: Log ALL localStorage keys to see what's actually there
+        const allKeys = Object.keys(localStorage);
+        console.log('🔍 ALL localStorage keys:', allKeys);
+
+        // DEBUG: Log all Spotify-related keys with their values
+        const spotifyKeys = allKeys.filter(key => key.toLowerCase().includes('spotify'));
+        console.log('🔍 All Spotify-related keys:', spotifyKeys);
+
+        spotifyKeys.forEach(key => {
+          const value = localStorage.getItem(key);
+          console.log(
+            `🔍 Key: ${key}, Value length: ${value?.length}, First 50 chars:`,
+            value?.substring(0, 50)
+          );
+        });
+
+        // Optimistic authentication detection
+        // We assume authentication exists if we find reasonable token-like data
+        // If tokens are invalid, we'll handle that when they're actually used
+        let hasValidTokens = false;
+
         const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-        if (clientId) {
-          const tokenKey = `spotify-sdk:${clientId}:token`;
-          const expiresAtKey = `spotify-sdk:${clientId}:expires_at`;
+        console.log('🔍 Client ID:', clientId);
 
-          const storedToken = localStorage.getItem(tokenKey);
-          const expiresAt = localStorage.getItem(expiresAtKey);
+        // Check for common Spotify SDK patterns with basic validation
+        const possibleTokenKeys = [
+          `spotify-sdk:${clientId}:token`,
+          `spotify-sdk:${clientId}:access_token`,
+          `spotifyToken:${clientId}`,
+          `spotify_token_${clientId}`,
+          'spotify-access-token',
+          'spotifyAccessToken',
+        ];
 
-          if (storedToken && expiresAt) {
-            const expirationTime = parseInt(expiresAt, 10);
-            const currentTime = Date.now();
+        console.log('🔍 Checking these token keys:', possibleTokenKeys);
 
-            // Check if token is not expired (with 5 minute buffer)
-            if (expirationTime > currentTime + 5 * 60 * 1000) {
-              setIsAuthenticated(true);
-              setError(null);
-              console.log('✅ SpotifyContext: Found valid stored authentication tokens.');
-              return;
-            } else {
-              console.log('ℹ️ SpotifyContext: Stored tokens expired.');
+        // Check known patterns with basic validation
+        for (const tokenKey of possibleTokenKeys) {
+          const token = localStorage.getItem(tokenKey);
+          console.log(`🔍 Checking key: ${tokenKey}, found:`, !!token);
+          if (token && token.trim().length > 20) {
+            // Basic validation: token should be reasonably long and not obviously corrupted
+            if (!token.includes('undefined') && !token.includes('null') && token.length > 20) {
+              console.log(`✅ Found reasonable token with key: ${tokenKey}`);
+              hasValidTokens = true;
+              break;
             }
-          } else {
-            console.log('ℹ️ SpotifyContext: No stored tokens found.');
           }
         }
 
-        // If we get here, no valid tokens were found
-        setIsAuthenticated(false);
-        setError(null);
-        console.log('ℹ️ SpotifyContext: No existing authentication found.');
+        // If no known patterns found, check any spotify keys for token-like content
+        if (!hasValidTokens && spotifyKeys.length > 0) {
+          console.log('🔍 Checking for token-like patterns in Spotify keys...');
+          for (const key of spotifyKeys) {
+            const value = localStorage.getItem(key);
+            console.log(`🔍 Key: ${key}, Value length: ${value?.length}`);
+
+            // Very basic validation: looks like it could be a token
+            if (
+              value &&
+              value.trim().length > 20 &&
+              !value.includes('undefined') &&
+              !value.includes('null') &&
+              !value.includes('{}') &&
+              (value.includes('.') || value.startsWith('BQ') || value.length > 50)
+            ) {
+              console.log(`✅ Found token-like content with key: ${key}`);
+              hasValidTokens = true;
+              break;
+            }
+          }
+        }
+
+        if (hasValidTokens) {
+          setIsAuthenticated(true);
+          setError(null);
+          console.log(
+            '✅ SpotifyContext: Found authentication tokens, assuming valid until proven otherwise.'
+          );
+        } else {
+          setIsAuthenticated(false);
+          setError(null);
+          console.log('ℹ️ SpotifyContext: No authentication tokens found.');
+        }
       } catch {
         // This is expected for users who haven't authenticated yet
         setIsAuthenticated(false);
         setError(null);
-        console.log('ℹ️ SpotifyContext: No existing authentication found.');
+        console.log(
+          'ℹ️ SpotifyContext: Error checking authentication, assuming not authenticated.'
+        );
       }
     };
 
@@ -142,12 +197,49 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
       setIsAuthenticated(true);
       setError(null);
       console.log('✅ SpotifyContext: Authentication successful.');
-    } catch {
-      // If this fails, it might be because we're being redirected
-      // The actual auth completion will happen when user returns
-      console.log('🔄 SpotifyContext: Auth flow initiated, waiting for redirect callback...');
-      setError(null);
-      setIsAuthenticated(false);
+    } catch (err) {
+      console.error('❌ SpotifyContext: Error during authentication:', err);
+
+      // If this fails, it could be because:
+      // 1. No tokens exist (expected) - should redirect to auth
+      // 2. Tokens are malformed/corrupted - need to clear them first
+
+      // Clear potentially corrupted tokens and recreate client
+      console.log(
+        '🧹 SpotifyContext: Clearing potentially corrupted tokens and recreating client...'
+      );
+
+      // Clear all Spotify-related localStorage keys
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('spotify') || key.includes('Spotify'))) {
+          keysToRemove.push(key);
+        }
+      }
+
+      console.log('🧹 Clearing Spotify-related localStorage keys:', keysToRemove);
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Recreate client with clean state
+      const newClient = spotifyAuth.getClient(true);
+      setClient(newClient);
+
+      try {
+        console.log('🔄 SpotifyContext: Retrying authentication with clean client...');
+        // Try again with clean client - this should trigger redirect to Spotify auth
+        await newClient.currentUser.profile();
+
+        // If we reach here, authentication worked
+        setIsAuthenticated(true);
+        setError(null);
+        console.log('✅ SpotifyContext: Authentication successful after cleanup.');
+      } catch {
+        console.log('🔄 SpotifyContext: Auth flow initiated, waiting for redirect callback...');
+        // This is expected - the SDK should redirect to Spotify auth
+        setError(null);
+        setIsAuthenticated(false);
+      }
     } finally {
       setIsConnecting(false);
     }
