@@ -1,12 +1,12 @@
 import { createBrowserRouter, redirect, LoaderFunctionArgs } from 'react-router';
 import { lazy, Suspense } from 'react';
 import RootLayout from '@/layouts/RootLayout';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import RizelProtectedRoute from '@/components/RizelProtectedRoute';
-import AuthRoute from '@/components/AuthRoute';
-import RootRedirect from '@/components/RootRedirect';
-import Loading from '@/components/Loading';
-import ErrorBoundary from '@/components/ErrorBoundary';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import RizelProtectedRoute from '@/components/auth/RizelProtectedRoute';
+import AuthRoute from '@/components/auth/AuthRoute';
+import RootRedirect from '@/components/auth/RootRedirect';
+import Loading from '@/components/ui/Loading';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import DashboardBaseLayout from '@/layouts/DashboardBaseLayout';
 
 // Lazy load pages

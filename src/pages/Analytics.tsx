@@ -21,7 +21,7 @@ import MoodInsightsCard from '@/components/analytics/MoodInsightsCard';
 import MoodTrendChart from '@/components/analytics/MoodTrendChart';
 import DayOfWeekChart from '@/components/analytics/DayOfWeekChart';
 import TimeOfDayChart from '@/components/analytics/TimeOfDayChart';
-import ErrorBoundary from '@/components/common/ErrorBoundary';
+import ErrorBoundary from '@/components/ui/ClassErrorBoundary';
 import AuthContext from '@/contexts/auth/authContext';
 import { useLoadingState } from '@/hooks/useLoadingState';
 import { Timestamp } from 'firebase/firestore';

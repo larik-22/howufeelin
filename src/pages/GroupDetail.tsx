@@ -34,9 +34,9 @@ import { MoodInput } from '@/components/mood/MoodInput';
 import { MoodCalendar } from '@/components/mood/MoodCalendar';
 import { GroupMembers } from '@/components/group/GroupMembers';
 import { RatingList } from '@/components/mood/RatingList';
-import GroupMembersDialog from '@/components/GroupMembersDialog';
-import GroupFormDialog from '@/components/GroupFormDialog';
-import LeaveGroupDialog from '@/components/LeaveGroupDialog';
+import GroupMembersDialog from '@/components/group/GroupMembersDialog';
+import GroupFormDialog from '@/components/group/GroupFormDialog';
+import LeaveGroupDialog from '@/components/group/LeaveGroupDialog';
 
 interface Notification {
   message: string;

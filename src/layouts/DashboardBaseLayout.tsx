@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Box, Container } from '@mui/material';
-import Navbar from '@/components/Navbar';
 import { Outlet } from 'react-router';
+import Navbar from '@/components/layout/Navbar';
 
 interface DashboardBaseLayoutProps {
   children?: ReactNode;
