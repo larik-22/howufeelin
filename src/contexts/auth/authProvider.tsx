@@ -23,9 +23,14 @@ import { analyticsService } from '@/services/analyticsService';
 const createUserWrapper = (user: User | null): User | null => {
   if (!user || process.env.NODE_ENV !== 'development') return user;
 
+  let email = user.email;
+  if (process.env.NODE_ENV === 'development' && import.meta.env.VITE_SIMULATE_RIZEL === 'true') {
+    email = simulateSpecialUser();
+  }
+
   return {
     ...user,
-    email: simulateSpecialUser(user.email || ''),
+    email,
   } as User;
 };
 
