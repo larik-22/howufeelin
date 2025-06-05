@@ -1,15 +1,21 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { SpotifyApi } from '@spotify/web-api-ts-sdk';
 import { spotifyAuth } from '@/services/spotify/auth';
+import { spotifyPlayer, PlayerState } from '@/services/spotify/player';
 
 interface SpotifyContextType {
   client: SpotifyApi | null;
   isConnecting: boolean;
   isAuthenticated: boolean;
   error: string | null;
+  playerState: PlayerState;
   connectSpotify: () => Promise<void>;
   logout: () => void;
   updateAuthenticationState: (isAuth: boolean, error?: string | null) => void;
+  playTrack: (trackUri: string) => Promise<void>;
+  pausePlayback: () => Promise<void>;
+  resumePlayback: () => Promise<void>;
+  togglePlayback: () => Promise<void>;
 }
 
 const SpotifyContext = createContext<SpotifyContextType | undefined>(undefined);
@@ -31,6 +37,52 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playerState, setPlayerState] = useState<PlayerState>({
+    isReady: false,
+    isLoading: false,
+    deviceId: null,
+    currentTrack: null,
+    isPlaying: false,
+    position: 0,
+    duration: 0,
+    error: null,
+    isPremium: false,
+  });
+
+  // Initialize player when authenticated
+  useEffect(() => {
+    if (isAuthenticated && client) {
+      const initializePlayer = async () => {
+        try {
+          await spotifyPlayer.initialize(async () => {
+            const token = await client.getAccessToken();
+            if (!token) {
+              throw new Error('No access token available');
+            }
+            return token.access_token;
+          });
+
+          // Subscribe to player state changes
+          const unsubscribe = spotifyPlayer.onStateChange(newState => {
+            setPlayerState(newState);
+          });
+
+          return unsubscribe;
+        } catch (error) {
+          console.error('Failed to initialize Spotify player:', error);
+        }
+      };
+
+      initializePlayer();
+    }
+
+    return () => {
+      // Cleanup when component unmounts or authentication changes
+      if (!isAuthenticated) {
+        spotifyPlayer.cleanup();
+      }
+    };
+  }, [isAuthenticated, client]);
 
   useEffect(() => {
     console.log('🔄 SpotifyContext: Initializing Spotify client...');
@@ -250,6 +302,9 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
     setError(null);
     setIsAuthenticated(false);
 
+    // Cleanup player
+    spotifyPlayer.cleanup();
+
     const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
     if (clientId) {
       const keysToClear = [
@@ -295,14 +350,55 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
     }
   };
 
+  const playTrack = async (trackUri: string) => {
+    try {
+      await spotifyPlayer.playTrack(trackUri);
+    } catch (error) {
+      console.error('Error playing track:', error);
+      setError(error instanceof Error ? error.message : 'Failed to play track');
+    }
+  };
+
+  const pausePlayback = async () => {
+    try {
+      await spotifyPlayer.pause();
+    } catch (error) {
+      console.error('Error pausing playback:', error);
+      setError(error instanceof Error ? error.message : 'Failed to pause playback');
+    }
+  };
+
+  const resumePlayback = async () => {
+    try {
+      await spotifyPlayer.resume();
+    } catch (error) {
+      console.error('Error resuming playback:', error);
+      setError(error instanceof Error ? error.message : 'Failed to resume playback');
+    }
+  };
+
+  const togglePlayback = async () => {
+    try {
+      await spotifyPlayer.togglePlay();
+    } catch (error) {
+      console.error('Error toggling playback:', error);
+      setError(error instanceof Error ? error.message : 'Failed to toggle playback');
+    }
+  };
+
   const value: SpotifyContextType = {
     client,
     isConnecting,
     isAuthenticated,
     error,
+    playerState,
     connectSpotify,
     logout,
     updateAuthenticationState,
+    playTrack,
+    pausePlayback,
+    resumePlayback,
+    togglePlayback,
   };
 
   return <SpotifyContext.Provider value={value}>{children}</SpotifyContext.Provider>;

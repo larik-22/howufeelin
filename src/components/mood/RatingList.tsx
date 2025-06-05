@@ -1,4 +1,15 @@
-import { Box, Card, CardContent, Typography, Avatar, Chip, Divider, Skeleton } from '@mui/material';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Avatar,
+  Chip,
+  Divider,
+  Skeleton,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
 import { Rating } from '@/types/Rating';
 import { GroupMember } from '@/types/GroupMember';
 import SentimentVeryDissatisfiedIcon from '@mui/icons-material/SentimentVeryDissatisfied';
@@ -8,6 +19,8 @@ import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt
 import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
 import { MusicNote } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { SongPlayButton } from '@/components/spotify/SongPlayButton';
+import LaunchIcon from '@mui/icons-material/Launch';
 
 interface RatingListProps {
   ratings: Rating[];
@@ -69,31 +82,22 @@ export const RatingList = ({
 
     const song = rating.songOfTheDay;
 
-    const handleSongClick = () => {
-      if (song.spotifyId) {
-        // Open directly in Spotify web player
-        window.open(`https://open.spotify.com/track/${song.spotifyId}`, '_blank');
-      }
-    };
-
     return (
       <Box
-        onClick={handleSongClick}
         sx={{
           ml: 7,
           mt: 1,
-          p: 1,
+          p: 1.5,
           display: 'flex',
           alignItems: 'center',
-          gap: 1,
+          gap: 1.5,
           borderRadius: 1,
           bgcolor: 'background.default',
           border: `1px solid ${theme.palette.divider}`,
-          cursor: 'pointer',
           transition: 'all 0.15s ease-out',
           '&:hover': {
             bgcolor: 'action.hover',
-            borderColor: 'theme.main',
+            borderColor: 'primary.main',
           },
         }}
       >
@@ -101,24 +105,26 @@ export const RatingList = ({
           src={song.albumImageUrl}
           variant="rounded"
           sx={{
-            width: 32,
-            height: 32,
+            width: 40,
+            height: 40,
             bgcolor: 'grey.200',
-            borderRadius: 0.5,
+            borderRadius: 1,
           }}
-        ></Avatar>
+        >
+          <MusicNote sx={{ fontSize: '1.2rem', color: 'text.secondary' }} />
+        </Avatar>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
-            variant="caption"
+            variant="body2"
             sx={{
-              fontWeight: 500,
+              fontWeight: 600,
               color: 'text.primary',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               display: 'block',
-              fontSize: '0.75rem',
+              mb: 0.5,
             }}
           >
             {song.name}
@@ -130,7 +136,7 @@ export const RatingList = ({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               opacity: 0.8,
             }}
           >
@@ -138,20 +144,35 @@ export const RatingList = ({
           </Typography>
         </Box>
 
-        <Box
-          sx={{
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            bgcolor: 'theme.main',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <MusicNote sx={{ fontSize: '10px', color: 'theme.main' }} />
-        </Box>
+        {/* Play button */}
+        {song.spotifyId && (
+          <SongPlayButton
+            trackUri={`spotify:track:${song.spotifyId}`}
+            trackName={song.name}
+            size="small"
+          />
+        )}
+
+        {/* Fallback link for non-premium users or if player fails */}
+        {song.spotifyId && (
+          <Tooltip title={`Open ${song.name} in Spotify`}>
+            <IconButton
+              size="small"
+              onClick={e => {
+                e.stopPropagation();
+                window.open(`https://open.spotify.com/track/${song.spotifyId}`, '_blank');
+              }}
+              sx={{
+                color: 'text.secondary',
+                '&:hover': {
+                  color: 'primary.main',
+                },
+              }}
+            >
+              <LaunchIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
     );
   };

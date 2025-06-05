@@ -3,7 +3,6 @@ import { SpotifyApi } from '@spotify/web-api-ts-sdk';
 // Get environment variables
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI;
-
 // Scopes needed for our app
 const SCOPES = [
   'user-read-private',
@@ -12,6 +11,10 @@ const SCOPES = [
   'playlist-read-private',
   'user-top-read',
   'user-read-recently-played',
+  // Web Playback SDK scopes
+  'streaming',
+  'user-read-playback-state',
+  'user-modify-playback-state',
 ];
 
 export class SpotifyAuthService {
