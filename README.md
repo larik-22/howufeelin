@@ -12,6 +12,8 @@ A web application that helps me and my friends track and share emotional wellbei
 - View patterns in your emotional journey
 - Manage group memberships and roles
 - Get real-time updates on group activity
+- Spotify intergation to choose "Song of the day"
+- Automated email notification upon leaving the rating
 
 ## 💻 Technologies
 
