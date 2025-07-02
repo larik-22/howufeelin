@@ -24,6 +24,7 @@ const createUserWrapper = (user: User | null): User | null => {
   if (!user || process.env.NODE_ENV !== 'development') return user;
 
   let email = user.email;
+  // check other env
   if (process.env.NODE_ENV === 'development' && import.meta.env.VITE_SIMULATE_RIZEL === 'true') {
     email = simulateSpecialUser();
   }

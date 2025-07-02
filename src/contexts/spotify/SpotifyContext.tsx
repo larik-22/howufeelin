@@ -95,9 +95,6 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
       const hasAuthCallback = urlParams.has('code') || urlParams.has('access_token');
 
       if (hasAuthCallback) {
-        console.log(
-          '🔄 SpotifyContext: Detected auth callback, attempting to complete authentication...'
-        );
         setIsConnecting(true);
 
         try {
@@ -105,7 +102,6 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
           await spotifyClient.currentUser.profile();
           setIsAuthenticated(true);
           setError(null);
-          console.log('✅ SpotifyContext: Authentication completed successfully from callback.');
 
           // Clean up URL parameters
           const cleanUrl = window.location.pathname;
@@ -126,19 +122,10 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
 
         // DEBUG: Log ALL localStorage keys to see what's actually there
         const allKeys = Object.keys(localStorage);
-        console.log('🔍 ALL localStorage keys:', allKeys);
 
         // DEBUG: Log all Spotify-related keys with their values
         const spotifyKeys = allKeys.filter(key => key.toLowerCase().includes('spotify'));
         console.log('🔍 All Spotify-related keys:', spotifyKeys);
-
-        spotifyKeys.forEach(key => {
-          const value = localStorage.getItem(key);
-          console.log(
-            `🔍 Key: ${key}, Value length: ${value?.length}, First 50 chars:`,
-            value?.substring(0, 50)
-          );
-        });
 
         // Optimistic authentication detection
         // We assume authentication exists if we find reasonable token-like data
@@ -158,12 +145,9 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
           'spotifyAccessToken',
         ];
 
-        console.log('🔍 Checking these token keys:', possibleTokenKeys);
-
         // Check known patterns with basic validation
         for (const tokenKey of possibleTokenKeys) {
           const token = localStorage.getItem(tokenKey);
-          console.log(`🔍 Checking key: ${tokenKey}, found:`, !!token);
           if (token && token.trim().length > 20) {
             // Basic validation: token should be reasonably long and not obviously corrupted
             if (!token.includes('undefined') && !token.includes('null') && token.length > 20) {

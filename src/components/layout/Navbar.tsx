@@ -26,10 +26,13 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AuthContext from '@/contexts/auth/authContext';
 import { isRizel } from '@/utils/specialUsers';
 import RizelEasterEgg from '@/components/special/RizelEasterEgg';
+import BirthdayBanner from '@/components/special/BirthdayBanner';
+import { useBirthdayMode } from '@/hooks/useBirthdayMode';
 
 export default function Navbar() {
   const theme = useTheme();
   const auth = useContext(AuthContext);
+  const birthdayMode = useBirthdayMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [heartExpanded, setHeartExpanded] = useState(false);
@@ -65,6 +68,7 @@ export default function Navbar() {
 
   return (
     <>
+      {birthdayMode && <BirthdayBanner />}
       <AppBar
         position="static"
         color="default"

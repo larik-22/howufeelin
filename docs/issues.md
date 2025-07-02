@@ -1,2 +1,1 @@
-- [x] Even though Spotify is authorized, the context and provider is not properly picking up the state resulting in displaying the button "Connect Spotify", which doesn't redirect on a click but resolves the state.
-- [ ]
+
