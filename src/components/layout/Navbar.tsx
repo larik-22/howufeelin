@@ -29,6 +29,7 @@ import RizelEasterEgg from '@/components/special/RizelEasterEgg';
 import BirthdayBanner from '@/components/special/BirthdayBanner';
 import { useBirthdayMode } from '@/hooks/useBirthdayMode';
 import { alpha } from '@mui/material/styles';
+import BirthdayConfetti from '@/components/special/BirthdayConfetti';
 
 export default function Navbar() {
   const theme = useTheme();
@@ -70,6 +71,7 @@ export default function Navbar() {
   return (
     <>
       {birthdayMode && <BirthdayBanner />}
+      {birthdayMode && <BirthdayConfetti />}
       <AppBar
         position="static"
         color="default"
