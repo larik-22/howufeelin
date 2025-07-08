@@ -105,7 +105,7 @@ export default function BirthdayBanner() {
             zIndex: 0,
           }}
         >
-          ❤️
+          🤍
         </motion.span>
       ))}
 
