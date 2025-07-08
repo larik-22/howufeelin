@@ -1,4 +1,4 @@
-import { devDataService } from '@/services/devDataService';
+//import { devDataService } from '@/services/devDataService';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 // Keep track of whether we've started the seeding process
@@ -25,7 +25,7 @@ async function seedDevData() {
     });
 
     // Seed the data
-    await devDataService.seedTestData();
+    //await devDataService.seedTestData();
     console.log('Development data seeded successfully');
   } catch (error) {
     console.error('Failed to seed development data:', error);

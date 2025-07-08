@@ -4,6 +4,16 @@ export const RATING_MIN = 1;
 export const RATING_MAX = 10;
 export const RATING_DEFAULT = 5;
 
+export interface SongOfTheDay {
+  spotifyId: string;
+  name: string;
+  artists: string[];
+  album: string;
+  albumImageUrl?: string;
+  uri: string;
+  previewUrl?: string;
+}
+
 export interface Rating {
   ratingId: string;
   groupId: string;
@@ -11,6 +21,7 @@ export interface Rating {
   ratingDate: string;
   ratingNumber: number;
   notes?: string;
+  songOfTheDay?: SongOfTheDay;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

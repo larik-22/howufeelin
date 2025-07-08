@@ -2,7 +2,7 @@ import { Navigate } from 'react-router';
 import { useContext } from 'react';
 import AuthContext from '@/contexts/auth/authContext';
 import { isRizel } from '@/utils/specialUsers';
-import Loading from '@/components/Loading';
+import Loading from '@/components/ui/Loading';
 
 interface RizelProtectedRouteProps {
   children: React.ReactNode;

@@ -25,6 +25,8 @@ import { useLoadingState } from '@/hooks/useLoadingState';
 import { copyToClipboard } from '@/utils/clipboard';
 import { addTestRatingsDirectly } from '@/scripts/addTestRatingsDirectly';
 import { useLeaveGroup } from '@/hooks/useLeaveGroup';
+import { SpotifyTrack } from '@/services/spotify/search';
+import { useSpotify } from '@/contexts/spotify/SpotifyContext';
 
 import { GroupHeader } from '@/components/group/GroupHeader';
 import { GroupDetails } from '@/components/group/GroupDetails';
@@ -32,9 +34,9 @@ import { MoodInput } from '@/components/mood/MoodInput';
 import { MoodCalendar } from '@/components/mood/MoodCalendar';
 import { GroupMembers } from '@/components/group/GroupMembers';
 import { RatingList } from '@/components/mood/RatingList';
-import GroupMembersDialog from '@/components/GroupMembersDialog';
-import GroupFormDialog from '@/components/GroupFormDialog';
-import LeaveGroupDialog from '@/components/LeaveGroupDialog';
+import GroupMembersDialog from '@/components/group/GroupMembersDialog';
+import GroupFormDialog from '@/components/group/GroupFormDialog';
+import LeaveGroupDialog from '@/components/group/LeaveGroupDialog';
 
 interface Notification {
   message: string;
@@ -53,6 +55,7 @@ export default function GroupDetail() {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const { getRoleColor, getRoleLabel, hasPermission } = useGroupPermissions();
+  const { logout: spotifyLogout } = useSpotify();
 
   // Get the group data from the loader
   const loaderData = useLoaderData() as LoaderData;
@@ -305,20 +308,42 @@ export default function GroupDetail() {
     setActiveTab(newValue);
   };
 
-  const handleMoodSubmit = async (rating: number, note: string) => {
+  const handleMoodSubmit = async (
+    rating: number,
+    note: string,
+    selectedSong?: SpotifyTrack | null
+  ) => {
     if (!groupId || !auth?.myUser?.userId) return;
 
     try {
       setIsRatingLoading(true);
 
-      // Create the rating
-      await ratingService.createRating(groupId, auth.myUser.userId, rating, note);
+      // Create the rating with optional song data
+      const songData = selectedSong
+        ? {
+            spotifyId: selectedSong.id,
+            name: selectedSong.name,
+            artists: selectedSong.artists,
+            album: selectedSong.album,
+            uri: selectedSong.uri,
+            // Conditionally add albumImageUrl if it exists
+            ...(selectedSong.albumImageUrl && { albumImageUrl: selectedSong.albumImageUrl }),
+            // Conditionally add previewUrl if it exists
+            ...(selectedSong.previewUrl && { previewUrl: selectedSong.previewUrl }),
+          }
+        : undefined;
+
+      await ratingService.createRating(groupId, auth.myUser.userId, rating, note, songData);
 
       // No need to manually update the state - the subscription will handle it
       setHasRatedToday(true);
 
+      const successMessage = selectedSong
+        ? `Mood rating submitted with "${selectedSong.name}" as your song of the day!`
+        : 'Mood rating submitted successfully!';
+
       setNotification({
-        message: 'Mood rating submitted successfully!',
+        message: successMessage,
         type: 'success',
       });
     } catch (error: unknown) {
@@ -498,9 +523,12 @@ export default function GroupDetail() {
                 variant="outlined"
                 color="error"
                 onClick={handleAddTestRatingsDirectly}
-                sx={{ mb: 2 }}
+                sx={{ mb: 2, mr: 2 }}
               >
                 Add Test Ratings Directly
+              </Button>
+              <Button variant="outlined" color="warning" onClick={spotifyLogout} sx={{ mb: 2 }}>
+                Logout Spotify (Test)
               </Button>
             </>
           )}
@@ -565,6 +593,7 @@ export default function GroupDetail() {
                 rating: rating.ratingNumber,
                 date: rating.ratingDate,
                 notes: rating.notes,
+                songOfTheDay: rating.songOfTheDay,
               }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}

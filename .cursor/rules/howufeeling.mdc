@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+These rules serve as context to always keep in mind:
+- We are using `react-router` for routing. It is part of new react-router v7
+- We are using MaterialUI (MUI) components for all the UI and styling
+- This codebase is solely frontend, backend powered by firebase and all backend communication implemented via respective services. We utilize real-time connections and caching to save firebase requests. We have no firebase functions and we are not planning on using them
+- For animations, we have `framer-motion` installed.

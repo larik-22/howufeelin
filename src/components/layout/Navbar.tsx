@@ -25,11 +25,16 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AuthContext from '@/contexts/auth/authContext';
 import { isRizel } from '@/utils/specialUsers';
-import RizelEasterEgg from './RizelEasterEgg';
+import RizelEasterEgg from '@/components/special/RizelEasterEgg';
+import BirthdayBanner from '@/components/special/BirthdayBanner';
+import { useBirthdayMode } from '@/hooks/useBirthdayMode';
+import { alpha } from '@mui/material/styles';
+import BirthdayConfetti from '@/components/special/BirthdayConfetti';
 
 export default function Navbar() {
   const theme = useTheme();
   const auth = useContext(AuthContext);
+  const birthdayMode = useBirthdayMode();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [heartExpanded, setHeartExpanded] = useState(false);
@@ -65,15 +70,21 @@ export default function Navbar() {
 
   return (
     <>
+      {birthdayMode && <BirthdayBanner />}
+      {birthdayMode && <BirthdayConfetti />}
       <AppBar
         position="static"
         color="default"
         elevation={0}
         sx={{
           borderBottom: `1px solid ${theme.palette.divider}`,
-          backdropFilter: 'blur(20px)',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backgroundImage:
+            'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.75) 100%)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           zIndex: theme.zIndex.appBar,
+          borderRadius: '0 0 8px 8px',
+          boxShadow: `0 2px 6px ${alpha(theme.palette.common.black, 0.05)}`,
         }}
       >
         <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>

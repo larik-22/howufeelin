@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router';
 import { useContext } from 'react';
 import AuthContext from '@/contexts/auth/authContext';
-import Loading from './Loading';
+import Loading from '@/components/ui/Loading';
 import { UserInfo } from 'firebase/auth';
 
 export default function AuthRoute({ children }: { children: React.ReactNode }) {
