@@ -18,7 +18,6 @@ import SentimentSatisfiedIcon from '@mui/icons-material/SentimentSatisfied';
 import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt';
 import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
 import { MusicNote } from '@mui/icons-material';
-import { MusicNote } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { SongPlayButton } from '@/components/spotify/SongPlayButton';
 import LaunchIcon from '@mui/icons-material/Launch';
