@@ -32,6 +32,7 @@ const createUserWrapper = (user: User | null): User | null => {
   return {
     ...user,
     email,
+    email,
   } as User;
 };
 

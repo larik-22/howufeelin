@@ -18,6 +18,7 @@ import SentimentSatisfiedIcon from '@mui/icons-material/SentimentSatisfied';
 import SentimentSatisfiedAltIcon from '@mui/icons-material/SentimentSatisfiedAlt';
 import SentimentVerySatisfiedIcon from '@mui/icons-material/SentimentVerySatisfied';
 import { MusicNote } from '@mui/icons-material';
+import { MusicNote } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { SongPlayButton } from '@/components/spotify/SongPlayButton';
 import LaunchIcon from '@mui/icons-material/Launch';
@@ -197,6 +198,10 @@ export const RatingList = ({
                 </Box>
               </Box>
               <Skeleton variant="text" width="60%" sx={{ ml: 7, mb: 1 }} />
+              {/* Song skeleton */}
+              <Box sx={{ ml: 7, mt: 1.5, mb: 1 }}>
+                <Skeleton variant="rectangular" width="100%" height={72} sx={{ borderRadius: 2 }} />
+              </Box>
               {/* Song skeleton */}
               <Box sx={{ ml: 7, mt: 1.5, mb: 1 }}>
                 <Skeleton variant="rectangular" width="100%" height={72} sx={{ borderRadius: 2 }} />
