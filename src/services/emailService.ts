@@ -1,5 +1,3 @@
-import { auth } from '@/firebase';
-
 interface EmailRecipient {
   to_email: string;
   to_name: string;
@@ -14,34 +12,12 @@ interface EmailNotificationData {
 }
 
 class EmailService {
-  private readonly BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+  private readonly BACKEND_URL = import.meta.env.VITE_EMAIL_WEBHOOK_URL;
 
   constructor() {
     if (!this.BACKEND_URL) {
       console.warn('Backend URL is not set. Email notifications will be disabled.');
     }
-  }
-
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-
-    // Add Firebase ID token for authentication
-    if (auth.currentUser) {
-      try {
-        const idToken = await auth.currentUser.getIdToken();
-        headers['Authorization'] = `Bearer ${idToken}`;
-      } catch (error) {
-        console.error('Failed to get Firebase ID token:', error);
-        throw new Error('Authentication failed');
-      }
-    } else {
-      throw new Error('User not authenticated');
-    }
-
-    return headers;
   }
 
   async sendRatingNotification(data: EmailNotificationData): Promise<void> {
@@ -51,8 +27,11 @@ class EmailService {
     }
 
     try {
-      const headers = await this.getAuthHeaders();
-      const endpoint = `${this.BACKEND_URL}/mail/group-announcement`;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      const endpoint = `${this.BACKEND_URL}`;
 
       const payload = {
         data: {
@@ -66,9 +45,6 @@ class EmailService {
         timestamp: new Date().toISOString(),
         event: 'rating_notification',
       };
-
-      console.log('Backend URL:', endpoint);
-      console.log('Sending notification with payload:', JSON.stringify(payload, null, 2));
 
       const response = await fetch(endpoint, {
         method: 'POST',
