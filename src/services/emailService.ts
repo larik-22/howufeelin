@@ -1,3 +1,5 @@
+import { auth } from '@/firebase';
+
 interface EmailRecipient {
   to_email: string;
   to_name: string;
@@ -12,21 +14,46 @@ interface EmailNotificationData {
 }
 
 class EmailService {
-  private readonly WEBHOOK_URL = import.meta.env.VITE_EMAIL_WEBHOOK_URL;
+  private readonly BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
   constructor() {
-    if (!this.WEBHOOK_URL) {
-      console.warn('Email webhook URL is not set. Email notifications will be disabled.');
+    if (!this.BACKEND_URL) {
+      console.warn('Backend URL is not set. Email notifications will be disabled.');
     }
   }
 
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+
+    // Add Firebase ID token for authentication
+    if (auth.currentUser) {
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${idToken}`;
+      } catch (error) {
+        console.error('Failed to get Firebase ID token:', error);
+        throw new Error('Authentication failed');
+      }
+    } else {
+      throw new Error('User not authenticated');
+    }
+
+    return headers;
+  }
+
   async sendRatingNotification(data: EmailNotificationData): Promise<void> {
-    if (!this.WEBHOOK_URL) {
-      console.warn('Email webhook not configured, skipping email notification');
+    if (!this.BACKEND_URL) {
+      console.warn('Backend URL not configured, skipping email notification');
       return;
     }
 
     try {
+      const headers = await this.getAuthHeaders();
+      const endpoint = `${this.BACKEND_URL}/mail/group-announcement`;
+
       const payload = {
         data: {
           from_name: data.from_name,
@@ -40,15 +67,12 @@ class EmailService {
         event: 'rating_notification',
       };
 
-      console.log('Webhook URL:', this.WEBHOOK_URL);
-      console.log('Sending webhook notification with payload:', JSON.stringify(payload, null, 2));
+      console.log('Backend URL:', endpoint);
+      console.log('Sending notification with payload:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch(this.WEBHOOK_URL, {
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers,
         body: JSON.stringify(payload),
       });
 
@@ -62,9 +86,9 @@ class EmailService {
         throw new Error(`HTTP error! status: ${response.status}, body: ${responseText}`);
       }
 
-      console.log('Webhook notification sent successfully');
+      console.log('Email notification sent successfully');
     } catch (error) {
-      console.error('Failed to send webhook notification:', error);
+      console.error('Failed to send email notification:', error);
       if (error instanceof Error) {
         console.error('Error details:', error.message);
         console.error('Error stack:', error.stack);
