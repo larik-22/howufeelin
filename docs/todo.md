@@ -13,7 +13,7 @@
 - [x] add analytics page
 - [x] after setting password (account linking) -> no redirect, should be fixed...
 - [x] analytics page proper services and loading. Test with data, test without data. Optimize with queries
-- [ ] fix forced Spotify auth redirect
+- [x] fix forced Spotify auth redirect
 - [ ] profile page (change password, change email, change username)
 - [ ] fix bug: sometimes when group created (slow internet connection), the group is not displayed on page immediately and refresh is needed. this is probably subscription mechanism issue
 - [ ] test security rules
