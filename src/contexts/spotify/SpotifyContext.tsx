@@ -106,6 +106,7 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
           // Clean up URL parameters
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
+          console.log('✅ SpotifyContext: Authentication successful from callback.');
         } catch (err) {
           console.error('❌ SpotifyContext: Failed to complete authentication from callback:', err);
           setIsAuthenticated(false);
@@ -116,89 +117,27 @@ export const SpotifyProvider = ({ children }: SpotifyProviderProps) => {
         return;
       }
 
-      // If no callback, check for existing authentication silently
+      // If no callback, check for existing authentication by attempting to use the SDK
+      // The SDK handles token persistence and refresh automatically
       try {
         console.log('🔄 SpotifyContext: Checking for existing authentication...');
-
-        // DEBUG: Log ALL localStorage keys to see what's actually there
-        const allKeys = Object.keys(localStorage);
-
-        // DEBUG: Log all Spotify-related keys with their values
-        const spotifyKeys = allKeys.filter(key => key.toLowerCase().includes('spotify'));
-        console.log('🔍 All Spotify-related keys:', spotifyKeys);
-
-        // Optimistic authentication detection
-        // We assume authentication exists if we find reasonable token-like data
-        // If tokens are invalid, we'll handle that when they're actually used
-        let hasValidTokens = false;
-
-        const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-        console.log('🔍 Client ID:', clientId);
-
-        // Check for common Spotify SDK patterns with basic validation
-        const possibleTokenKeys = [
-          `spotify-sdk:${clientId}:token`,
-          `spotify-sdk:${clientId}:access_token`,
-          `spotifyToken:${clientId}`,
-          `spotify_token_${clientId}`,
-          'spotify-access-token',
-          'spotifyAccessToken',
-        ];
-
-        // Check known patterns with basic validation
-        for (const tokenKey of possibleTokenKeys) {
-          const token = localStorage.getItem(tokenKey);
-          if (token && token.trim().length > 20) {
-            // Basic validation: token should be reasonably long and not obviously corrupted
-            if (!token.includes('undefined') && !token.includes('null') && token.length > 20) {
-              console.log(`✅ Found reasonable token with key: ${tokenKey}`);
-              hasValidTokens = true;
-              break;
-            }
-          }
-        }
-
-        // If no known patterns found, check any spotify keys for token-like content
-        if (!hasValidTokens && spotifyKeys.length > 0) {
-          console.log('🔍 Checking for token-like patterns in Spotify keys...');
-          for (const key of spotifyKeys) {
-            const value = localStorage.getItem(key);
-            console.log(`🔍 Key: ${key}, Value length: ${value?.length}`);
-
-            // Very basic validation: looks like it could be a token
-            if (
-              value &&
-              value.trim().length > 20 &&
-              !value.includes('undefined') &&
-              !value.includes('null') &&
-              !value.includes('{}') &&
-              (value.includes('.') || value.startsWith('BQ') || value.length > 50)
-            ) {
-              console.log(`✅ Found token-like content with key: ${key}`);
-              hasValidTokens = true;
-              break;
-            }
-          }
-        }
-
-        if (hasValidTokens) {
-          setIsAuthenticated(true);
-          setError(null);
-          console.log(
-            '✅ SpotifyContext: Found authentication tokens, assuming valid until proven otherwise.'
-          );
-        } else {
-          setIsAuthenticated(false);
-          setError(null);
-          console.log('ℹ️ SpotifyContext: No authentication tokens found.');
-        }
-      } catch {
-        // This is expected for users who haven't authenticated yet
+        
+        // Try to get the user profile - this will work if:
+        // 1. Valid tokens exist in localStorage
+        // 2. The SDK can refresh expired tokens using the refresh token
+        // If tokens don't exist or can't be refreshed, this will fail silently
+        await spotifyClient.currentUser.profile();
+        
+        // If we reach here, authentication is valid
+        setIsAuthenticated(true);
+        setError(null);
+        console.log('✅ SpotifyContext: Found and validated existing authentication.');
+      } catch (err) {
+        // No valid authentication - user needs to connect
+        // This is expected for first-time users or after logout
         setIsAuthenticated(false);
         setError(null);
-        console.log(
-          'ℹ️ SpotifyContext: Error checking authentication, assuming not authenticated.'
-        );
+        console.log('ℹ️ SpotifyContext: No valid authentication found. User needs to connect.');
       }
     };
 
