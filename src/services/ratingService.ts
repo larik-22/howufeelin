@@ -157,9 +157,10 @@ class FirestoreRatingService implements RatingService {
       );
     }
 
-    if (notes && notes.length > 500) {
-      throw new RatingError('Notes must be less than 500 characters', 'INVALID_NOTES');
-    }
+    console.log('Notes:', notes);
+    // if (notes && notes.length > 500) {
+    //   throw new RatingError('Notes must be less than 500 characters', 'INVALID_NOTES');
+    // }
   }
 
   /**

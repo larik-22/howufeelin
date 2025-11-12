@@ -594,6 +594,7 @@ export default function GroupDetail() {
                 date: rating.ratingDate,
                 notes: rating.notes,
                 songOfTheDay: rating.songOfTheDay,
+                createdAt: rating.createdAt,
               }))}
               selectedDate={selectedDate}
               onDateChange={handleDateChange}

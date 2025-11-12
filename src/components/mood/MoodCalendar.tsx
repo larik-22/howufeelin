@@ -19,6 +19,7 @@ import { MusicNote } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useMemo, useEffect, useState } from 'react';
 import { SongOfTheDay } from '@/types/Rating';
+import { Timestamp } from 'firebase/firestore';
 
 interface CalendarRating {
   userId: string;
@@ -27,6 +28,7 @@ interface CalendarRating {
   date: string;
   notes?: string;
   songOfTheDay?: SongOfTheDay;
+  createdAt: Timestamp;
 }
 
 interface MoodCalendarProps {
@@ -663,6 +665,12 @@ export const MoodCalendar = ({
                                 }}
                               >
                                 {rating.username}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(rating.createdAt.toDate()).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
                               </Typography>
                               <Chip
                                 label={`Rating: ${rating.rating}`}
